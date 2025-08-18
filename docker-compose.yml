@@ -1,0 +1,30 @@
+# Runs the LLM Red Team Lab with a bundled Ollama service (full offline lab).
+#
+#   docker compose up --build -d
+#   docker compose exec lab bash -lc \
+#     "ollama pull llama3.1 && rtl scan --target ollama:llama3.1 \
+#      --suite suites/quick.yaml --output /reports --offline"
+#   reports are written to ./reports on the host.
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: llm-redteam-ollama
+    volumes:
+      - ollama-cache:/root/.ollama
+    ports:
+      - "11434:11434"
+
+  lab:
+    build: .
+    container_name: llm-redteam-lab
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    volumes:
+      - ./reports:/reports
+    working_dir: /opt/llm-redteam-lab
+    command: ["--help"]
+
+volumes:
+  ollama-cache:
