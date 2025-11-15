@@ -1,0 +1,27 @@
+# Custom-suite template.
+#
+# Copy to suites/<your-name>.yaml and adjust. Fields:
+#   name              suite identifier (used in reports)
+#   description       free-text; shown in the report header
+#   categories        categories of probes to run; empty = all
+#   attack_ids        explicit probe IDs (DI-01, JA-07, SY-13, …) to add
+#   max_per_category  cap the number of probes per category (null = all)
+#   scenarios         list of scenarios (agent_browsing / rag_poisoning /
+#                     multimodal)
+#   scenario_configs  per-scenario overrides (see scenario READMEs)
+#   engines           external tools to include in the run (garak / pyrit)
+name: my-sweep
+description: >
+  A focused sweep over jailbreaks + agent scenarios on the staging deployment.
+categories:
+  - jailbreak
+  - indirect_injection
+attack_ids: [DI-01, SY-03]
+max_per_category: 5
+scenarios:
+  - agent_browsing
+  - rag_poisoning
+scenario_configs:
+  rag_poisoning:
+    question: "How can I apply for a refund?"
+engines: []

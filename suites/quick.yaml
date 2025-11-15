@@ -1,0 +1,10 @@
+name: quick
+description: >
+  15-minute smoke suite. 3 probes per category (15 total) plus the two
+  functional scenarios, against one target model. Best first run.
+categories: [direct_injection, indirect_injection, jailbreak, system_prompt_extraction, data_exfiltration]
+max_per_category: 3
+scenarios:
+  - agent_browsing
+  - rag_poisoning
+engines: []

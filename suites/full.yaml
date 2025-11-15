@@ -1,0 +1,19 @@
+name: full
+description: >
+  Comprehensive sweep — every probe in all five categories (110 probes) plus
+  all scenarios. Budget ~1h+ on local models, faster on hosted APIs. This is
+  the suite to run before a release or an external red-team snapshot.
+categories: []
+attack_ids: []
+max_per_category: null
+scenarios:
+  - agent_browsing
+  - rag_poisoning
+  - multimodal
+scenario_configs:
+  rag_poisoning:
+    question: "What is the official support email?"
+    top_k: 2
+engines:
+  - garak
+  - pyrit
