@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>LLM Red Team Lab — Scan Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b1220; --panel: #111a2c; --panel2: #16223a;
+    --text: #e6ecf5; --muted: #8fa3c0; --line: #22304c;
+    --critical:#e5484d; --high:#ff930f; --medium:#f5d90a; --low:#30a46c; --info:#7c8ba1;
+    --accent:#4cc2ff; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 28px 20px 60px; }
+  header { border-bottom:1px solid var(--line); padding-bottom:18px; margin-bottom:24px; }
+  h1 { font-size:22px; margin:0 0 6px; letter-spacing:.2px; }
+  h2 { font-size:17px; margin:34px 0 12px; color:var(--accent); }
+  h3 { font-size:15px; margin:0 0 4px; }
+  .meta { color:var(--muted); font-size:13px; }
+  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .stat .num { font-size:26px; font-weight:700; }
+  .stat .lbl { color:var(--muted); font-size:12px; margin-top:2px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin-bottom:20px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .card h3 { margin-bottom:10px; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+  .b-critical{background:var(--critical); color:#fff;} .b-high{background:var(--high); color:#1c1200;}
+  .b-medium{background:var(--medium); color:#1c1600;} .b-low{background:var(--low); color:#06241a;} .b-info{background:var(--info); color:#0b1220;}
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .panel .head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .panel .atlas { color:var(--accent); font-size:12px; }
+  .prompt, .response { background:#0a0f1a; border:1px solid var(--line); border-radius:8px; padding:10px 12px; font:12px/1.5 var(--mono); white-space:pre-wrap; word-break:break-word; margin:8px 0; }
+  .response.ok { border-left:3px solid var(--critical); }
+  .response.blocked { border-left:3px solid var(--low); }
+  .response.ambig { border-left:3px solid var(--medium); }
+  pre.steps { background:#0a0f1a; border:1px solid var(--line); border-radius:8px; padding:10px 12px; font:12px/1.55 var(--mono); white-space:pre-wrap; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; }
+  a { color:var(--accent); }
+  .chart-box { max-width:380px; margin:0 auto; }
+  .muted { color:var(--muted); }
+  footer { margin-top:40px; border-top:1px solid var(--line); padding-top:14px; color:var(--muted); font-size:12px; }
+  .pill { display:inline-block; background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:1px 8px; font-size:11px; color:var(--muted); margin-right:5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>LLM Red Team Lab — Scan Report</h1>
+  <div class="meta">
+    Target: <b>{{ meta.provider }}:{{ meta.model }}</b>
+    {% if meta.base_url %}&nbsp;·&nbsp;base URL {{ meta.base_url }}{% endif %}<br/>
+    Suite: <b>{{ meta.suite }}</b>{% if meta.suite_description %} — {{ meta.suite_description }}{% endif %}<br/>
+    Ran: {{ meta.timestamp }} · duration {{ "%.1f"|format(meta.duration_seconds) }}s ·
+    judge mode {{ meta.judge_mode }} · {{ meta.tool }} v{{ meta.version }}
+  </div>
+</header>
+
+<h2>Executive summary</h2>
+<div class="stat-grid">
+  <div class="stat"><div class="num">{{ summary.total }}</div><div class="lbl">probes run</div></div>
+  <div class="stat"><div class="num" style="color:var(--critical)">{{ summary.succeeded }}</div><div class="lbl">succeeded</div></div>
+  <div class="stat"><div class="num" style="color:var(--low)">{{ summary.refused }}</div><div class="lbl">refused</div></div>
+  <div class="stat"><div class="num" style="color:var(--medium)">{{ summary.ambiguous }}</div><div class="lbl">ambiguous</div></div>
+  <div class="stat"><div class="num">{{ summary.blocked }}</div><div class="lbl">guardrailed</div></div>
+  <div class="stat"><div class="num" style="color:var(--accent)">{{ summary.originals }}</div><div class="lbl">original probes in library</div></div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <h3>Severity distribution</h3>
+    <div class="chart-box"><canvas id="sevChart"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>By category</h3>
+    <table>
+      {% for cat, count in summary.by_category.items() %}
+      <tr><td>{{ cat.replace('_', ' ') }}</td><td align="right">{{ count }}</td></tr>
+      {% endfor %}
+      {% if not summary.by_category %}<tr><td class="muted">—</td><td></td></tr>{% endif %}
+    </table>
+    <h3 style="margin-top:16px">ATLAS crosswalk</h3>
+    <table>
+      {% for row in atlas_crosswalk %}
+      <tr><td><a href="{{ row.url }}" target="_blank">{{ row.id }}</a></td><td>{{ row.name }}</td><td align="right">{{ row.count }}</td></tr>
+      {% endfor %}
+      {% if not atlas_crosswalk %}<tr><td class="muted" colspan="3">—</td></tr>{% endif %}
+    </table>
+  </div>
+</div>
+
+<h2>Findings</h2>
+{% for f in findings %}
+<div class="panel">
+  <div class="head">
+    <span class="badge b-{{ f.severity }}">{{ f.severity }}</span>
+    <h3>{{ f.name }} <span class="muted" style="font-weight:400">({{ f.attack_id }})</span></h3>
+    <span class="atlas">{{ f.atlas_names|join(", ") }}</span>
+  </div>
+  <div class="muted" style="margin-top:4px">
+    Category {{ f.category.replace('_',' ') }} · technique <i>{{ f.technique }}</i> ·
+    verdict <b>{{ f.verdict_label }}</b> · confidence {{ "%.2f"|format(f.confidence) }} · judge {{ f.judge_source }}
+    {% if f.scenario %} · scenario <b>{{ f.scenario }}</b>{% endif %}
+    {%- if f.blocked %} · <span style="color:var(--low)">guardrailed</span>{% endif %}
+  </div>
+
+  {% if f.skipped %}
+    <div class="muted">Skipped: {{ f.error or "not applicable" }}</div>
+  {% else %}
+    <div class="response {{ 'ok' if f.success else ('blocked' if f.blocked else 'ambig') }}">{{ f.response_excerpt }}</div>
+  {% endif %}
+
+  {% if f.rationale %}
+  <div class="muted" style="margin-top:6px"><b>Rating rationale:</b>
+    {%- for item in f.rationale %} {{ item }};{% endfor %}
+  </div>
+  {% endif %}
+
+  {% if f.raw %}
+  <div class="muted" style="margin-top:6px"><b>Raw extras:</b>
+    {%- for k, v in f.raw.items() %} <span class="pill">{{ k }}={{ v }}</span>{% endfor %}
+  </div>
+  {% endif %}
+
+  <details style="margin-top:10px">
+    <summary>Reproduction &amp; evidence</summary>
+    <pre class="steps">{% for line in f.repro_steps %}{{ line }}
+{% endfor %}</pre>
+    <div class="prompt"><b>Prompt</b>
+{{ f.prompt_excerpt }}</div>
+    {% if f.remediation %}<div class="muted" style="margin-top:6px"><b>Remediation:</b> {{ f.remediation }}</div>{% endif %}
+  </details>
+</div>
+{% else %}
+<div class="panel muted">No findings recorded for this scan.</div>
+{% endfor %}
+
+{% if engine_results %}
+<h2>Engine integrations</h2>
+<div class="panel">
+  <table>
+    <tr><th>Engine</th><th>Probe</th><th>Success</th><th>ATLAS</th><th>Summary</th></tr>
+    {% for e in engine_results %}
+    <tr><td>{{ e.engine }}</td><td>{{ e.probe_id }}</td><td>{{ e.success }}</td>
+        <td>{{ e.atlas_ids|join(", ") }}</td><td>{{ e.summary }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<footer>
+  Generated by llm-redteam-lab v{{ meta.version }}. Target metadata contains no credentials.
+  Authorized testing only — see DISCLAIMER.md. Severity is heuristic; validate high/critical findings manually.
+</footer>
+
+</div>
+<script>
+  const sev = {{ distribution|tojson }};
+  const labels = sev.map(d => d.level);
+  const values = sev.map(d => d.count);
+  const colors = { critical:'#e5484d', high:'#ff930f', medium:'#f5d90a', low:'#30a46c', info:'#7c8ba1' };
+  new Chart(document.getElementById('sevChart'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: labels.map(l => colors[l] || '#888') }] },
+    options: { plugins: { legend: { position: 'bottom', labels: { color: '#8fa3c0' } } } }
+  });
+</script>
+</body>
+</html>
