@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,pyrit]"
+      - name: Lint (ruff)
+        run: |
+          ruff check rtl tests
+          ruff format --check rtl tests
+      - name: Type-check (mypy)
+        run: mypy rtl
+      - name: Tests + coverage
+        run: pytest -q --cov=rtl --cov-report=term-missing
+      - name: Offline demo smoke
+        run: rtl scan --target mock --suite suites/quick.yaml --output reports
