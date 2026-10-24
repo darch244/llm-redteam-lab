@@ -8,14 +8,50 @@ aggregation.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from rtl.attacks.model import AttackPrompt
-from rtl.evaluation.judge import JudgeVerdict
+from rtl.evaluation.judge import OUTCOMES, JudgeVerdict
 from rtl.evaluation.severity import SeverityLevel, SeverityResult
+
+# Scenario outcomes use the probe outcome vocabulary plus lifecycle statuses
+# that only a multi-step scenario can produce. ``error`` and ``skipped`` are
+# lifecycle states, not attack outcomes; an errored evaluation is counted as
+# ``error`` even when its provisional outcome is ``suspected``.
+SCENARIO_STATUSES: tuple[str, ...] = (
+    "confirmed",
+    "suspected",
+    "failed",
+    "inconclusive",
+    "error",
+    "skipped",
+    "unsupported",
+)
+
+
+def scenario_status_counts(outcomes: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    """Count scenario outcomes without mixing them into probe totals.
+
+    A scenario entry with an explicit lifecycle ``status`` of ``error``,
+    ``skipped`` or ``unsupported`` is counted in that bucket. Evaluated
+    entries fall back to their ``outcome`` (confirmed/suspected/failed/
+    inconclusive). ``total`` always equals ``len(outcomes)``.
+    """
+    counts = {status: 0 for status in SCENARIO_STATUSES}
+    for item in outcomes:
+        status = item.get("status")
+        if status in {"error", "skipped", "unsupported"}:
+            counts[str(status)] += 1
+            continue
+        outcome = item.get("outcome")
+        if outcome in OUTCOMES:
+            counts[str(outcome)] += 1
+    counts["total"] = len(outcomes)
+    return counts
 
 
 def _utcnow() -> datetime:
@@ -50,6 +86,7 @@ class ProbeResult(BaseModel):
             response=self.response,
             atlas_ids=[self.probe.atlas_id],
             verdict_label=verdict.label,
+            outcome=verdict.outcome if not self.skipped else "inconclusive",
             success=verdict.success,
             confidence=verdict.confidence,
             judge_source=verdict.source,
@@ -88,6 +125,7 @@ class Finding(BaseModel):
     response: str
     atlas_ids: list[str] = Field(default_factory=list)
     verdict_label: str
+    outcome: str = "inconclusive"
     success: bool
     confidence: float = Field(ge=0.0, le=1.0)
     judge_source: str = "heuristic"
@@ -111,6 +149,13 @@ class Finding(BaseModel):
             raise ValueError(f"unknown verdict {value!r}")
         return value
 
+    @field_validator("outcome")
+    @classmethod
+    def _known_outcome(cls, value: str) -> str:
+        if value not in OUTCOMES:
+            raise ValueError(f"unknown outcome {value!r}")
+        return value
+
 
 class ReportMeta(BaseModel):
     """Scan metadata that goes into every report."""
@@ -130,13 +175,26 @@ class ReportMeta(BaseModel):
 
 
 class ScanSummary(BaseModel):
-    """Aggregate counts across a scan."""
+    """Aggregate counts across a scan.
+
+    ``total`` counts *every* resolved probe that produced a finding,
+    including probes whose request failed (target errors) — they carry
+    ``outcome == "failed"`` and are additionally counted in ``errors``.
+    Outcome counts (confirmed/suspected/inconclusive/failed) partition the
+    total; ``refused`` (verdict layer) and ``errors`` are subsets of
+    ``failed``, so reports must present them nested, never as disjoint.
+    """
 
     total: int = 0
     succeeded: int = 0
     refused: int = 0
     ambiguous: int = 0
     blocked: int = 0
+    confirmed: int = 0
+    suspected: int = 0
+    failed: int = 0
+    inconclusive: int = 0
+    errors: int = 0
     by_severity: dict[str, int] = Field(default_factory=dict)
     by_category: dict[str, int] = Field(default_factory=dict)
     by_atlas: dict[str, int] = Field(default_factory=dict)
@@ -160,6 +218,11 @@ class ScanResult(BaseModel):
             refused=sum(1 for f in self.findings if f.verdict_label == "refused"),
             ambiguous=sum(1 for f in self.findings if f.verdict_label == "ambiguous"),
             blocked=sum(1 for f in self.findings if f.blocked),
+            confirmed=sum(1 for f in self.findings if f.outcome == "confirmed"),
+            suspected=sum(1 for f in self.findings if f.outcome == "suspected"),
+            failed=sum(1 for f in self.findings if f.outcome == "failed"),
+            inconclusive=sum(1 for f in self.findings if f.outcome == "inconclusive"),
+            errors=sum(1 for f in self.findings if f.error and not f.skipped),
             originals=self._count_originals(),
         )
         for finding in self.findings:
@@ -181,4 +244,12 @@ class ScanResult(BaseModel):
         return sum(1 for probes in load_cache().values() for probe in probes if probe.source == "original")
 
 
-__all__ = ["Finding", "ProbeResult", "ReportMeta", "ScanResult", "ScanSummary"]
+__all__ = [
+    "Finding",
+    "ProbeResult",
+    "ReportMeta",
+    "SCENARIO_STATUSES",
+    "ScanResult",
+    "ScanSummary",
+    "scenario_status_counts",
+]
