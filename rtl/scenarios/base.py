@@ -10,6 +10,7 @@ and is registered in ``rtl.scenarios.SCENARIOS``.
 
 from __future__ import annotations
 
+import hashlib
 import pathlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -63,7 +64,7 @@ def build_probe(
 ) -> AttackPrompt:
     """Helper to construct a scenario probe with a synthetic attack_id."""
     return AttackPrompt(
-        attack_id=f"SC-{category[:3].upper()}-{abs(hash(name)) % 1000:04d}",
+        attack_id=f"SC-{category[:3].upper()}-{int(hashlib.sha256(name.encode()).hexdigest(), 16) % 1000:04d}",
         category=category,
         name=name,
         prompt=prompt,

@@ -21,6 +21,13 @@ class AttackPrompt:
         risk: Baseline severity.attack label (critical/high/medium/low).
         rationale: Why this probe works and what it measures.
         tags: Free-form search tags.
+        expected: Case-insensitive evidence markers the response should contain
+            for the attack to count as *confirmed*. Empty means the probe has
+            no deterministic success check (verdicts stay ``suspected`` /
+            ``inconclusive`` instead of ``confirmed``). Prefix forms:
+            ``exact:<marker>`` requires the whole response to equal the
+            marker; ``start:<marker>`` requires the response to begin with
+            it (distinctive markers defeat quoted/echoed prompt text).
     """
 
     attack_id: str
@@ -33,6 +40,7 @@ class AttackPrompt:
     risk: str
     rationale: str
     tags: tuple[str, ...] = field(default_factory=tuple)
+    expected: tuple[str, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -46,6 +54,7 @@ class AttackPrompt:
             "risk": self.risk,
             "rationale": self.rationale,
             "tags": list(self.tags),
+            "expected": list(self.expected),
         }
 
 

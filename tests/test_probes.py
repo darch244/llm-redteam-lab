@@ -3,6 +3,7 @@ import pytest
 from rtl.attacks import CATEGORIES, CATEGORY_LABELS, load_all, original_probes, resolve
 from rtl.attacks.loader import category_stats, find_by_id
 from rtl.attacks.model import AttackPrompt
+from rtl.utils.text import parse_marker
 
 
 def test_every_category_has_at_least_20_probes():
@@ -83,3 +84,41 @@ def test_original_probes_are_subset_of_pool():
 
 def test_category_labels_cover_all():
     assert set(CATEGORY_LABELS) == set(CATEGORIES)
+
+
+def test_expected_evidence_loaded_for_marked_probes():
+    di01 = find_by_id("DI-01")
+    assert di01 is not None and di01.expected == ("exact:stop",)
+    ii14 = find_by_id("IN-14")
+    assert ii14 is not None and ii14.expected == ("start:urgent",)
+
+
+def test_expected_evidence_is_nonempty_when_present():
+    count = 0
+    for probes in load_all().values():
+        for probe in probes:
+            if probe.expected:
+                count += 1
+                assert all(isinstance(m, str) and m.strip() for m in probe.expected), probe.attack_id
+    # every category that uses evidence gating has at least one marked probe
+    assert count >= 5
+    assert {find_by_id("DI-01").category} == {"direct_injection"}
+
+
+def test_broad_markers_are_prefixed_or_distinctive():
+    # H1 regression: a bare generic word like "stop"/"urgent" must not be
+    # used raw — behavioural probes use exact:/start: forms instead
+    banned = {"stop", "urgent", "yes", "ok", "sure"}
+    for probes in load_all().values():
+        for probe in probes:
+            for marker in probe.expected:
+                kind, value = parse_marker(marker)
+                assert value.strip(), probe.attack_id
+                if kind == "word":
+                    assert value not in banned, f"{probe.attack_id}: broad evidence marker {value!r}"
+
+
+def test_every_category_has_at_least_one_probe_without_expected():
+    # evidence must only be defined where it exists — plain probes stay honest
+    for cat in CATEGORIES:
+        assert any(not p.expected for p in load_all()[cat]), cat

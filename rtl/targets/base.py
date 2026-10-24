@@ -23,6 +23,7 @@ from typing import Any
 import httpx
 
 from rtl.logging import get_logger
+from rtl.utils.secrets import scrub
 
 log = get_logger("targets")
 
@@ -139,7 +140,7 @@ class Target(abc.ABC):
         return {
             "provider": self.provider,
             "model": self.model,
-            "base_url": self.base_url,
+            "base_url": scrub(self.base_url) if self.base_url else None,
             "auth_configured": self.api_key is not None if hasattr(self, "api_key") else False,
         }
 

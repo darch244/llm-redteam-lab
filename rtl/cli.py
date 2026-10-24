@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import pathlib
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Literal, cast
 
 import typer
@@ -24,7 +25,7 @@ from rtl.logging import setup_logging
 
 if TYPE_CHECKING:
     from rtl.config import ScanOptions
-    from rtl.reporting.models import ScanResult
+    from rtl.reporting.models import ScanResult, ScanSummary
 
 app = typer.Typer(
     name="rtl",
@@ -76,14 +77,46 @@ def scan(
         max_prompt_len=max_prompt_len,
     )
     result = asyncio.run(_run(options))
-    console.print(
-        f"[green]Scan complete:[/green] {result.summary.total} probes, "
-        f"{result.summary.succeeded} succeeded, "
-        f"{result.summary.refused} refused, "
-        f"{result.summary.blocked} guarded, "
-        f"{result.summary.ambiguous} ambiguous"
-    )
+    console.print(f"[green]Scan complete:[/green] {format_scan_summary(result.summary, result.scenario_outcomes)}")
     console.print(f"[cyan]Reports:[/cyan] {options.output_dir}")
+
+
+def format_scan_summary(
+    summary: ScanSummary,
+    scenario_outcomes: Sequence[Mapping[str, object]] | None = None,
+) -> str:
+    """One-line human summary.
+
+    Outcome counts (confirmed/suspected/inconclusive/failed) partition the
+    total; ``refused`` and ``errors`` are subsets of ``failed`` and are shown
+    nested so the numbers never double-count. Scenario results are reported
+    separately and never added to the probe total.
+    """
+    line = (
+        f"{summary.total} probes: "
+        f"{summary.confirmed} confirmed, "
+        f"{summary.suspected} suspected, "
+        f"{summary.inconclusive} inconclusive, "
+        f"{summary.failed} failed "
+        f"({summary.refused} refused, {summary.errors} target errors within failed)"
+    )
+    if not scenario_outcomes:
+        return line
+    from rtl.reporting.models import scenario_status_counts
+
+    counts = scenario_status_counts(scenario_outcomes)
+    if counts["total"] == 0:
+        return line
+    return line + (
+        f" | {counts['total']} scenarios: "
+        f"{counts['confirmed']} confirmed, "
+        f"{counts['suspected']} suspected, "
+        f"{counts['failed']} failed, "
+        f"{counts['inconclusive']} inconclusive, "
+        f"{counts['error']} errors, "
+        f"{counts['skipped']} skipped, "
+        f"{counts['unsupported']} unsupported"
+    )
 
 
 async def _run(options: ScanOptions) -> ScanResult:
@@ -205,4 +238,4 @@ def main() -> None:
     app()
 
 
-__all__ = ["app", "main"]
+__all__ = ["app", "format_scan_summary", "main"]
