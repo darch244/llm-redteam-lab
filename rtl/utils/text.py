@@ -80,6 +80,7 @@ def _has_positive_output_directive(window: str) -> bool:
     return _NEGATED_DIRECTIVE.search(prefix) is None
 
 
+
 def truncate(text: str, limit: int = 500) -> str:
     """Truncate a string to ``limit`` chars with an ellipsis marker."""
     text = text.strip()
@@ -159,7 +160,10 @@ def looks_like_parrot(prompt_normalized: str, response_normalized: str) -> bool:
     covered = sum(b.size for b in blocks)
     response_covered = covered / len(response_normalized)
     prompt_covered = covered / max(len(prompt_normalized), 1)
-    return response_covered >= _ECHO_RESPONSE_COVER and prompt_covered >= _ECHO_PROMPT_COVER
+    return (
+        response_covered >= _ECHO_RESPONSE_COVER
+        and prompt_covered >= _ECHO_PROMPT_COVER
+    )
 
 
 def _quote_mask(prompt_normalized: str, response_normalized: str) -> bytes:

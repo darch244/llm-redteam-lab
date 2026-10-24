@@ -77,7 +77,9 @@ def scan(
         max_prompt_len=max_prompt_len,
     )
     result = asyncio.run(_run(options))
-    console.print(f"[green]Scan complete:[/green] {format_scan_summary(result.summary, result.scenario_outcomes)}")
+    console.print(
+        f"[green]Scan complete:[/green] {format_scan_summary(result.summary, result.scenario_outcomes)}"
+    )
     console.print(f"[cyan]Reports:[/cyan] {options.output_dir}")
 
 

@@ -73,7 +73,12 @@ def test_aggregate_counts_failed_and_errors_separately():
     assert scan.summary.errors == 1
     assert scan.summary.confirmed == 1
     # failed probes must not silently vanish from totals
-    outcomes = scan.summary.confirmed + scan.summary.failed + scan.summary.suspected + scan.summary.inconclusive
+    outcomes = (
+        scan.summary.confirmed
+        + scan.summary.failed
+        + scan.summary.suspected
+        + scan.summary.inconclusive
+    )
     assert outcomes >= scan.summary.total
 
 
@@ -188,7 +193,9 @@ def test_html_failed_stat_is_displayed_alongside_its_subsets(tmp_path):
     # as subsets of it so the numbers cannot be misread as disjoint
     refused = JudgeVerdict("refused", False, 0.9, "refused", "heuristic", outcome="failed")
     sev_r = SeverityResult("low", 1, True, ["refused"])
-    finding_refused = ProbeResult(probe=_probe(), response="I refuse.").to_finding(refused, sev_r, {"provider": "mock"})
+    finding_refused = ProbeResult(probe=_probe(), response="I refuse.").to_finding(
+        refused, sev_r, {"provider": "mock"}
+    )
     finding_error = ProbeResult(probe=_probe(), response="", error="RuntimeError: down").to_finding(
         JudgeVerdict("ambiguous", False, 0.0, "did not complete", "heuristic", outcome="failed"),
         SeverityResult("info", 0, False, ["x"]),
@@ -304,6 +311,7 @@ def _require_reportlab() -> None:
 
     if not pdf_reporter._REPORTLAB_AVAILABLE:
         pytest.skip("reportlab is not installed")
+
 
 
 def test_pdf_export_requires_reportlab(tmp_path, monkeypatch):

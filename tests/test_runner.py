@@ -39,7 +39,10 @@ async def test_end_to_end_mock_scan_produces_reports(tmp_path):
     assert result.summary.confirmed == 0
     assert result.summary.succeeded == 0
     outcome_counts = (
-        result.summary.confirmed + result.summary.suspected + result.summary.failed + result.summary.inconclusive
+        result.summary.confirmed
+        + result.summary.suspected
+        + result.summary.failed
+        + result.summary.inconclusive
     )
     assert outcome_counts == result.summary.total
 
