@@ -30,7 +30,9 @@ def _build_context(result: ScanResult) -> dict[str, object]:
         item = cast(dict[str, Any], scrub_dict(finding.model_dump(mode="json")))
         item["response_excerpt"] = scrub(finding.response)[:800]
         item["prompt_excerpt"] = scrub(finding.prompt)[:500]
-        item["atlas_names"] = [ATLAS_MAP.get(tech, {}).get("name", tech) for tech in item.get("atlas_ids", [])]
+        item["atlas_names"] = [
+            ATLAS_MAP.get(tech, {}).get("name", tech) for tech in item.get("atlas_ids", [])
+        ]
         findings.append(item)
 
     severity_order = ["critical", "high", "medium", "low", "info"]

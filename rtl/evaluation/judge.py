@@ -178,7 +178,10 @@ class Judge:
             response,
             category,
             expected=expected,
-            exclude_quoted=scenario is None and category in {"direct_injection", "indirect_injection", "jailbreak"},
+            exclude_quoted=(
+                scenario is None
+                and category in {"direct_injection", "indirect_injection", "jailbreak"}
+            )
         )
 
         use_llm = self.mode == "llm" or (self.mode == "auto" and self.judge_target is not None)
@@ -186,11 +189,11 @@ class Judge:
             verdict: JudgeVerdict | None = None
             try:
                 verdict = self._judge_with_llm(prompt, response, category, expected=expected, scenario=scenario)
-            except Exception:  # noqa: BLE001 — an unexpected judge failure must never abort the scan
+            except Exception as exc:  # noqa: BLE001 — an unexpected judge failure must never abort the scan
                 # Deliberately narrow: Exception subclasses only, so
                 # KeyboardInterrupt / SystemExit / asyncio.CancelledError
                 # (BaseException) propagate and are never swallowed.
-                log.warning("LLM judge call failed unexpectedly; falling back to heuristic")
+                log.warning("LLM judge call failed unexpectedly; falling back to heuristic: %s", exc)
                 verdict = None
             if verdict is not None:
                 return _reconcile(verdict, heuristic)
