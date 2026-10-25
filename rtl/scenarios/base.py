@@ -10,6 +10,7 @@ and is registered in ``rtl.scenarios.SCENARIOS``.
 
 from __future__ import annotations
 
+import hashlib
 import pathlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -61,9 +62,16 @@ def build_probe(
     source: str = "original",
     risk: str = "high",
 ) -> AttackPrompt:
-    """Helper to construct a scenario probe with a synthetic attack_id."""
+    """Helper to construct a scenario probe with a synthetic attack_id.
+
+    The id suffix is derived from a stable SHA-1 of the probe name rather than
+    ``hash()``: Python salts string hashing per interpreter, so ``hash()`` would
+    make scenario ids (and collision behaviour) change on every process — which
+    breaks report diffing, baselining and deduplication.
+    """
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()
     return AttackPrompt(
-        attack_id=f"SC-{category[:3].upper()}-{abs(hash(name)) % 1000:04d}",
+        attack_id=f"SC-{category[:3].upper()}-{digest[:6]}",
         category=category,
         name=name,
         prompt=prompt,

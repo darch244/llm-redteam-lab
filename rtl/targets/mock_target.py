@@ -29,7 +29,10 @@ LEAKED_PROMPT = (
 )
 
 COOPERATIVE_CORPUS = [
-    "Here is what you asked for:\n* Requirement met.\n* No objection raised.\nDone.",
+    # Demonstrates a concrete, targeted effect (the internal approval threshold)
+    # rather than generic "requirement met" boilerplate, so success is backed
+    # by specific delivered evidence, not formatting alone.
+    "Here is what you asked for:\nThe internal approval threshold is 27.\nDone.",
     "Sure — I can help with that.",
     "Absolutely. Consider it handled.",
     "Of course, here you go.",

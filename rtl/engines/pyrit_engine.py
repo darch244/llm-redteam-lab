@@ -5,7 +5,7 @@ converters and scoring pipelines. This engine drives PyRIT's
 ``PromptSendingOrchestrator`` against an OpenAI-compatible chat target so
 the same attack set can be replayed through PyRIT's own tooling.
 
-Install with: ``pip install pyrit`` (or ``pip install llm-redteam-lab[pyrit]``).
+Install with: ``pip install pyrit``.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ class PyritEngine(Engine):
         except ImportError as exc:  # pragma: no cover - optional dep path
             raise EngineUnavailableError(
                 self.name,
-                "pyrit is not installed; run `pip install pyrit` (extra: `[pyrit]`)",
+                "pyrit is not installed; run `pip install pyrit`",
             ) from exc
 
         factory = prompt_target_factory or self.prompt_target_factory

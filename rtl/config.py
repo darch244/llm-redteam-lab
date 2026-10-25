@@ -129,8 +129,20 @@ class Suite(BaseModel):
 
     @classmethod
     def load(cls, path: str | pathlib.Path) -> Suite:
-        """Load a suite from a YAML file."""
-        raw = _read_yaml(pathlib.Path(path))
+        """Load a suite from a YAML file.
+
+        Accepts an explicit path (``/x/custom.yaml``), a bundled name
+        (``quick.yaml``) or a bundled path as written in the docs
+        (``suites/quick.yaml``). When the path does not exist on disk the
+        bundled ``suites/`` directory is searched by basename, so the same
+        command works from a source checkout and from an installed wheel.
+        """
+        candidate = pathlib.Path(path)
+        if not candidate.is_file():
+            bundled = bundled_suites_dir() / candidate.name
+            if bundled.is_file():
+                candidate = bundled
+        raw = _read_yaml(candidate)
         return cls.model_validate(raw)
 
     def effective_categories(self) -> list[str]:
@@ -155,9 +167,7 @@ class ScanOptions(BaseModel):
     output_dir: pathlib.Path = pathlib.Path("reports")
     offline: bool = False
     redact: bool = True
-    parallel: bool = False
     max_prompt_len: int | None = Field(default=None, ge=64)
-    judge_max_retries: int = Field(default=2, ge=0, le=10)
 
 
 def _read_yaml(path: pathlib.Path) -> dict[str, Any]:
@@ -172,10 +182,19 @@ def _read_yaml(path: pathlib.Path) -> dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def bundled_suites_dir() -> pathlib.Path:
-    """Absolute path of the shipped ``suites/`` directory."""
-    here = pathlib.Path(__file__).resolve().parent
-    candidate = here.parent / "suites"
-    return candidate if candidate.is_dir() else pathlib.Path("suites")
+    """Absolute path of the shipped ``suites/`` directory.
+
+    The suites ship *inside* the ``rtl`` package so an installed wheel contains
+    them (previously ``suites/`` lived at the repo root and was absent from any
+    built distribution — see F-02 in the gap analysis).
+    """
+    return pathlib.Path(__file__).resolve().parent / "suites"
+
+
+@lru_cache(maxsize=1)
+def examples_dir() -> pathlib.Path:
+    """Absolute path of the shipped ``examples/`` fixture directory (packaged)."""
+    return pathlib.Path(__file__).resolve().parent / "examples"
 
 
 def list_suites() -> list[pathlib.Path]:
@@ -192,5 +211,7 @@ __all__ = [
     "ScanOptions",
     "Suite",
     "TargetConfig",
+    "bundled_suites_dir",
+    "examples_dir",
     "list_suites",
 ]

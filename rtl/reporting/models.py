@@ -27,6 +27,7 @@ class ProbeResult(BaseModel):
 
     probe: AttackPrompt
     response: str = ""
+    effective_prompt: str | None = None
     raw: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
     elapsed_seconds: float = 0.0
@@ -47,6 +48,7 @@ class ProbeResult(BaseModel):
             category=self.probe.category,
             technique=self.probe.technique,
             prompt=self.probe.prompt,
+            effective_prompt=self.effective_prompt,
             response=self.response,
             atlas_ids=[self.probe.atlas_id],
             verdict_label=verdict.label,
@@ -62,19 +64,34 @@ class ProbeResult(BaseModel):
             raw=self.raw,
             skipped=self.skipped,
             error=self.error,
-            repro_steps=_repro_steps(self.probe, self.response),
+            repro_steps=_repro_steps(self.probe, self.response, self.effective_prompt),
             timestamp=self.timestamp,
         )
 
 
-def _repro_steps(probe: AttackPrompt, response: str) -> list[str]:
-    return [
+def _repro_steps(probe: AttackPrompt, response: str, effective_prompt: str | None = None) -> list[str]:
+    """Build reproduction steps that describe what the target *actually received*.
+
+    When the runner truncates a prompt to ``max_prompt_len`` the probe object
+    still carries the full library prompt, so ``effective_prompt`` is threaded
+    through to keep the reproduction data faithful. The original prompt is only
+    mentioned as a note when truncation changed what was sent.
+    """
+    sent = effective_prompt if effective_prompt is not None else probe.prompt
+    steps = [
         f"1. Start a fresh chat/session with the target model ({probe.attack_id}).",
         "2. Send the following prompt exactly:",
-        f"   {probe.prompt}",
-        "3. Observe whether the response exhibits the attack's expected effect.",
-        f"4. (Recorded response) {response.strip()[:400] or '<empty>'}",
+        f"   {sent}",
     ]
+    if effective_prompt is not None and effective_prompt != probe.prompt:
+        steps.insert(
+            2,
+            f"   (Note: the library prompt was {len(probe.prompt)} chars and was truncated to "
+            f"{len(effective_prompt)} for this scan; the text below is what the target received.)",
+        )
+    steps.append("3. Observe whether the response exhibits the attack's expected effect.")
+    steps.append(f"4. (Recorded response) {response.strip()[:400] or '<empty>'}")
+    return steps
 
 
 class Finding(BaseModel):
@@ -85,6 +102,7 @@ class Finding(BaseModel):
     category: str
     technique: str
     prompt: str
+    effective_prompt: str | None = None
     response: str
     atlas_ids: list[str] = Field(default_factory=list)
     verdict_label: str
@@ -130,17 +148,30 @@ class ReportMeta(BaseModel):
 
 
 class ScanSummary(BaseModel):
-    """Aggregate counts across a scan."""
+    """Aggregate counts across a scan.
+
+    ``total`` and the probe verdict tallies count only single-shot probes; the
+    ``scenarios_*`` fields account for the multi-step scenario outcomes
+    separately so a successful scenario (e.g. a CRITICAL RAG-poisoning run) is
+    never silently missing from the summary. ``by_severity``/``by_category``/
+    ``by_atlas`` cover probes only; reporters merge scenario severities into the
+    displayed distribution.
+    """
 
     total: int = 0
     succeeded: int = 0
     refused: int = 0
     ambiguous: int = 0
     blocked: int = 0
+    errors: int = 0
     by_severity: dict[str, int] = Field(default_factory=dict)
     by_category: dict[str, int] = Field(default_factory=dict)
     by_atlas: dict[str, int] = Field(default_factory=dict)
     originals: int = 0
+    scenarios_total: int = 0
+    scenarios_succeeded: int = 0
+    scenarios_errors: int = 0
+    scenarios_by_severity: dict[str, int] = Field(default_factory=dict)
 
 
 class ScanResult(BaseModel):
@@ -153,13 +184,19 @@ class ScanResult(BaseModel):
     scenario_outcomes: list[dict[str, Any]] = Field(default_factory=list)
 
     def aggregate(self) -> None:
-        """Recompute the summary based on current findings."""
+        """Recompute the summary based on current findings.
+
+        Execution errors (``skipped`` findings carrying an ``error``) are counted
+        separately and excluded from every security-outcome tally, so a failed
+        probe is never misreported as a success, refusal or guardrail.
+        """
         summary = ScanSummary(
             total=len(self.findings),
             succeeded=sum(1 for f in self.findings if f.success and not f.skipped),
-            refused=sum(1 for f in self.findings if f.verdict_label == "refused"),
-            ambiguous=sum(1 for f in self.findings if f.verdict_label == "ambiguous"),
-            blocked=sum(1 for f in self.findings if f.blocked),
+            refused=sum(1 for f in self.findings if f.verdict_label == "refused" and not f.skipped),
+            ambiguous=sum(1 for f in self.findings if f.verdict_label == "ambiguous" and not f.skipped),
+            blocked=sum(1 for f in self.findings if f.blocked and not f.skipped),
+            errors=sum(1 for f in self.findings if f.skipped and f.error),
             originals=self._count_originals(),
         )
         for finding in self.findings:
@@ -172,6 +209,26 @@ class ScanResult(BaseModel):
         # preserve a stable severity ordering in the dicts
         order = ["info", "low", "medium", "high", "critical"]
         summary.by_severity = {k: summary.by_severity.get(k, 0) for k in order}
+
+        # Scenario outcomes are aggregated separately. A judged scenario counts
+        # toward scenarios_succeeded and its severity distribution; an errored
+        # or skipped scenario is an explicit error; an unsupported scenario is
+        # counted in the total but is neither a success nor an error.
+        scenario_sev: dict[str, int] = {}
+        for outcome in self.scenario_outcomes:
+            summary.scenarios_total += 1
+            status = outcome.get("status")
+            if status in ("error", "skipped"):
+                summary.scenarios_errors += 1
+                continue
+            if status == "unsupported":
+                continue
+            if outcome.get("success"):
+                summary.scenarios_succeeded += 1
+            sev = outcome.get("severity")
+            if isinstance(sev, str) and sev:
+                scenario_sev[sev] = scenario_sev.get(sev, 0) + 1
+        summary.scenarios_by_severity = {k: scenario_sev.get(k, 0) for k in order}
         self.summary = summary
 
     @staticmethod

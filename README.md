@@ -27,8 +27,9 @@ permitted to test.
   and [PyRIT](https://github.com/Azure/PyRIT).
 - **LLM-as-judge** with an offline heuristic fallback; per-finding severity
   scoring with explainable rationale.
-- **Reports**: JSON (secret-scrubbed), standalone HTML (Chart.js + ATLAS
-  crosswalk), optional PDF via reportlab.
+- **Reports**: JSON (secret-scrubbed), standalone HTML (inline CSS severity
+  distribution + ATLAS crosswalk, no external assets), optional PDF via
+  reportlab.
 - **100% offline demo** — `rtl scan --target mock` runs the whole pipeline
   with zero credentials.
 
@@ -46,7 +47,7 @@ open reports/report.html
 rtl scan --target ollama:llama3.1 --suite suites/quick.yaml --output reports/ollama
 ```
 
-More runnable examples in `examples/`, including
+More runnable examples in `rtl/examples/`, including
 `demo_against_ollama.sh` and the bundled sample report.
 
 ## CLI
@@ -65,8 +66,9 @@ Target syntax is `provider:model`, e.g. `openai:gpt-4o`,
 
 ## Suites
 
-YAML files in `suites/` define what runs: probe categories, explicit probe
-IDs, caps, scenarios, and external engines.
+YAML files in `rtl/suites/` define what runs: probe categories, explicit probe
+IDs, caps, scenarios, and external engines. They ship inside the package, so
+`--suite quick.yaml` (or `--suite suites/quick.yaml`) works from any directory.
 
 - `quick.yaml` — 15-min smoke suite (3 probes per category + 2 scenarios)
 - `full.yaml` — every probe + all scenarios (~1h)
@@ -85,11 +87,11 @@ rtl/
 ├── scenarios/         agent_browsing · rag_poisoning · multimodal
 ├── evaluation/        ATLAS registry, judge (LLM + heuristic), severity
 ├── reporting/         models, JSON/HTML/PDF reporters, HTML template
+├── suites/            quick · full · custom-template (bundled in the package)
+├── examples/          poisoned fixtures, sample report, Ollama demo (bundled)
 └── utils/             files, text heuristics, secret scrubbing
 docs/                  architecture, adding-new-attacks, ethics, ATLAS map
-examples/              poisoned fixtures, sample report, Ollama demo
-suites/                quick · full · custom-template
-tests/                 68 tests (pytest, includes coverage of core layers)
+tests/                 135 tests (pytest, includes coverage of core layers)
 ```
 
 ## Ethical use & authorization

@@ -20,13 +20,14 @@ import pathlib
 from typing import Any
 
 from rtl.attacks.model import AttackPrompt
+from rtl.config import examples_dir
 from rtl.logging import get_logger
 from rtl.reporting.models import ProbeResult
 from rtl.scenarios.base import ScenarioError
 
 log = get_logger("scenarios.multimodal")
 
-_EXAMPLES_DIR = pathlib.Path(__file__).resolve().parents[3] / "examples"
+_EXAMPLES_DIR = examples_dir()
 
 
 async def run_multimodal(
@@ -49,7 +50,7 @@ async def run_multimodal(
         attack_id="SC-MUL-0001",
         category="indirect_injection",
         name="Multimodal: image-embedded instruction (stub)",
-        prompt="[image: examples/multimodal/poisoned_chart.png] — see README",
+        prompt="[image: rtl/examples/multimodal/poisoned_chart.png] — see README",
         technique="image-embedded instruction (stub)",
         atlas_id="AML.T0051.001",
         source="original",

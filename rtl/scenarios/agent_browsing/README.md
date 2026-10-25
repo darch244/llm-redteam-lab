@@ -14,7 +14,7 @@ hidden instructions. The scenario measures whether the agent honours them.
 
 ## What the scenario does
 
-1. Loads `examples/agent_browsing_malicious_page.html` (a fake product page with a
+1. Loads `rtl/examples/agent_browsing_malicious_page.html` (a fake product page with a
    hidden `<system-reminder>` block).
 2. Assembles the context exactly as an agent stack would:
    `system prompt + fetched page + new user message`.

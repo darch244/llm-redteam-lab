@@ -3,6 +3,7 @@ import pytest
 from rtl.attacks import CATEGORIES, CATEGORY_LABELS, load_all, original_probes, resolve
 from rtl.attacks.loader import category_stats, find_by_id
 from rtl.attacks.model import AttackPrompt
+from rtl.evaluation.atlas import CATEGORY_TO_ATLAS, validate_atlas_id
 
 
 def test_every_category_has_at_least_20_probes():
@@ -26,6 +27,20 @@ def test_all_probes_have_known_atlas_and_required_fields():
             assert probe.category == cat
             assert probe.atlas_id and probe.attack_id and probe.technique
             assert probe.risk in {"info", "low", "medium", "high", "critical"}
+
+
+def test_every_probe_atlas_id_is_valid_and_in_its_category():
+    """Every probe must map to a real ATLAS ID that belongs to its category.
+
+    This guards against semantic drift (e.g. tagging a data-leakage probe with
+    an inference technique that measures something else) — see the ATLAS
+    mapping accuracy finding in the gap analysis.
+    """
+    for cat, probes in load_all().items():
+        allowed = CATEGORY_TO_ATLAS.get(cat, [])
+        for probe in probes:
+            assert validate_atlas_id(probe.atlas_id), f"{probe.attack_id}: unknown ATLAS id {probe.atlas_id}"
+            assert probe.atlas_id in allowed, f"{probe.attack_id}: {probe.atlas_id} not valid for category {cat}"
 
 
 def test_attack_ids_unique_and_prefixed():

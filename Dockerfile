@@ -14,8 +14,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Optional external engines (garak/PyRIT) add heavy deps; keep them optional.
 COPY pyproject.toml README.md LICENSE ./
 COPY rtl ./rtl
-COPY suites ./suites
-COPY examples ./examples
 COPY docs ./docs
 
 RUN pip install .

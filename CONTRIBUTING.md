@@ -39,7 +39,7 @@ make test lint typecheck cov
    config=None, out_dir=None) -> list[ProbeResult]` plus a `README.md`.
 2. Register it in `rtl/scenarios/__init__.py` and in `SCENARIO_TO_ATLAS`
    (`rtl/evaluation/atlas.py`).
-3. Reference any fixture under `examples/` and cover it with a test in
+3. Reference any fixture under `rtl/examples/` and cover it with a test in
    `tests/test_scenarios.py`.
 
 ## Before submitting

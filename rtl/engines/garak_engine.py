@@ -5,7 +5,7 @@ probes (prompt injection, jailbreak, encoding attacks, leakrepetition,
 ...). Rather than reimplementing them, this engine shells out to the
 installed ``garak`` CLI and maps per-probe results onto MITRE ATLAS.
 
-Install with: ``pip install garak`` (or ``pip install llm-redteam-lab[garak]``).
+Install with: ``pip install garak``.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ class GarakEngine(Engine):
         if not shutil.which(self.garak_bin):
             raise EngineUnavailableError(
                 self.name,
-                "garak is not installed; run `pip install garak` (extra: `[garak]`)",
+                "garak is not installed; run `pip install garak`",
             )
 
         selected = probes or DEFAULT_PROBES

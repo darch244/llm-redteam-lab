@@ -116,7 +116,7 @@ CATEGORY_TO_ATLAS: dict[str, list[str]] = {
     "indirect_injection": ["AML.T0051.001", "AML.T0051"],
     "jailbreak": ["AML.T0054"],
     "system_prompt_extraction": ["AML.T0056", "AML.T0051.000"],
-    "data_exfiltration": ["AML.T0057", "AML.T0024", "AML.T0024.000"],
+    "data_exfiltration": ["AML.T0057", "AML.T0086", "AML.T0024"],
 }
 
 SCENARIO_TO_ATLAS: dict[str, list[str]] = {

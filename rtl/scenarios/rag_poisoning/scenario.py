@@ -17,6 +17,7 @@ from collections import Counter
 from typing import Any
 
 from rtl.attacks.model import AttackPrompt
+from rtl.config import examples_dir
 from rtl.logging import get_logger
 from rtl.reporting.models import ProbeResult
 from rtl.scenarios.base import ScenarioError
@@ -24,7 +25,7 @@ from rtl.utils.text import truncate
 
 log = get_logger("scenarios.rag_poisoning")
 
-_EXAMPLES_DIR = pathlib.Path(__file__).resolve().parents[3] / "examples"
+_EXAMPLES_DIR = examples_dir()
 _POISONED_DOC = _EXAMPLES_DIR / "rag" / "poisoned_refunds_policy.md"
 _NORMAL_DOC = _EXAMPLES_DIR / "rag" / "normal_company_policy.md"
 

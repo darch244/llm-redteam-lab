@@ -48,9 +48,10 @@ def scan(
     max_prompt_len: int | None = typer.Option(None, help="Truncate long prompts"),
     redact: bool = typer.Option(True, help="Scrub secrets in reports"),
     log_level: str = typer.Option("INFO", help="Log verbosity"),
+    json_logs: bool = typer.Option(False, "--json-logs", help="Emit newline-delimited JSON logs"),
 ) -> None:
     """Run an attack suite against a target and produce JSON + HTML reports."""
-    setup_logging(log_level)
+    setup_logging(log_level, json_mode=json_logs)
     target_cfg = TargetConfig.parse(target)
     suite_path = suite or str(_find_suite("quick.yaml"))
     suite_cfg = Suite.load(suite_path)
@@ -136,6 +137,7 @@ def report_cmd(
     input_file: str = typer.Option(..., help="Path to report.json"),
     output: str = typer.Option(None, help="Output path (default: <input>.html)"),
     format: str = typer.Option("html", help="html / json / pdf"),
+    redact: bool = typer.Option(True, help="Scrub secrets when regenerating"),
 ) -> None:
     """Regenerate HTML/PDF from an existing report.json."""
     from rtl.reporting.json_reporter import load_json
@@ -145,7 +147,7 @@ def report_cmd(
     if format == "json":
         from rtl.reporting.json_reporter import write_json
 
-        write_json(result, dest)
+        write_json(result, dest, redact=redact)
     elif format == "pdf":
         from rtl.reporting.pdf_reporter import render_pdf
 
@@ -153,7 +155,7 @@ def report_cmd(
     else:
         from rtl.reporting.html_reporter import render_html
 
-        render_html(result, dest)
+        render_html(result, dest, redact=redact)
     console.print(f"[green]Report written:[/green] {dest}")
 
 

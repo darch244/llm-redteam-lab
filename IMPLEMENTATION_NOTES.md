@@ -49,8 +49,8 @@ rtl scan --target ollama:llama3.1 --suite suites/quick.yaml --output reports/oll
 
 | Gate     | Command                               | Requirement |
 |----------|---------------------------------------|-------------|
-| Tests    | `pytest -q`                           | 68 passing  |
-| Coverage | `pytest --cov=rtl`                    | ≥55% total; ≥80% on config, evaluation, reporting |
+| Tests    | `pytest -q`                           | 135 passing |
+| Coverage | `pytest --cov=rtl`                    | ≥55% total gate (currently ~81%); core logic (config, evaluation, reporting/models+html+json) ≥90% — the optional PDF reporter is lighter-tested |
 | Lint     | `ruff check rtl tests`                | clean       |
 | Format   | `ruff format --check rtl tests`       | clean       |
 | Types    | `mypy rtl`                            | 0 errors    |

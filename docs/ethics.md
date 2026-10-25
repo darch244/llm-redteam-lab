@@ -35,7 +35,7 @@ running anything.
   can reproduce the same class of failures and harden against them. If you
   ship a probe, ship the *defence* in the rationale (what good hardening looks
   like).
-- **Indirect-injection / RAG fixtures** live under `examples/` so the poisoning
+- **Indirect-injection / RAG fixtures** live under `rtl/examples/` so the poisoning
   mechanics are transparent and self-contained — you can demod everything
   against the mock target.
 - **The `mock` target cannot be "owned".** Prefer `mock` for education, CI,
