@@ -1,148 +1,213 @@
 # LLM Red Team Lab
 
-An adversarial testing framework for LLM applications — MITRE ATLAS–mapped
-probe libraries, executable multi-step scenarios, pluggable targets, an
-LLM-as-judge scorer, and self-contained JSON/HTML/PDF reports.
+An adversarial testing framework for LLM applications, featuring MITRE ATLAS–mapped probe libraries, autonomous adaptive attack planning, cryptographic evidence verification, executable multi-step agent scenarios, pluggable targets, and self-contained multi-format reports (JSON, HTML, SARIF, Markdown, PDF).
 
-Built for **authorized red-team engagements, bug bounties, and internal
-LLM security testing**. Run it against systems you own or are explicitly
-permitted to test.
-
----
+Built for authorized red-team engagements, bug bounty research within program scope, and internal LLM security evaluation. Only test systems you own or have explicit permission to assess.
 
 ## Highlights
 
-- **110 probes** across 5 ATLAS-mapped categories (≥20 per category, ≥10
-  original each):
+- **110 adversarial probes** across 5 ATLAS-mapped categories (≥20 per category, ≥10 original each):
   - Direct Prompt Injection — `AML.T0051.000`
   - Indirect Prompt Injection — `AML.T0051.001` / `.002`
   - Jailbreak — `AML.T0054`
   - System Prompt Extraction — `AML.T0056`
   - Data Exfiltration — `AML.T0057`, `AML.T0024`, `AML.T0024.000`
-- **Adaptive Planning Engine**: Stateful adversarial planner (`--planner heuristic`) with
-  multi-dimensional budget enforcement (probes, turns, prompt/output tokens, cost, time),
-  evidence-driven reframing on refusals, and confirmation branching.
-- **Deterministic Offline Replay**: Audit and reproduce attack trajectories offline using
-  cryptographically hashed manifests (`rtl replay --manifest report.json`).
-- **Bounded Agent & Tool Runtime**: Pre-execution validation and execution sandboxing for
-  agent tool-use and function-calling security audits.
-- **Multi-step scenarios**: agent-browsing (poisoned web page), RAG
-  poisoning, memory poisoning, tool poisoning, conversation jailbreak, and a documented multimodal stub.
-- **4 targets**: `openai`, `anthropic`, `ollama`, and a deterministic `mock`
-  (no API key needed; used by CI).
-- **Optional engines**: wrappers around [garak](https://github.com/NVIDIA/garak)
-  and [PyRIT](https://github.com/Azure/PyRIT).
-- **LLM-as-judge** with an offline heuristic fallback; per-finding severity
-  scoring with explainable rationale.
-- **Complete Multi-Format Reports**:
-  - Standalone HTML with CSS charts & Adaptive Plan Trace (no external assets).
-  - SARIF v2.1.0 for GitHub Advanced Security & CI/CD pipeline code scanning.
-  - GitHub-Flavored Markdown executive briefs for PR reviews and documentation.
-  - Machine-readable JSON with secret scrubbing.
+- **Autonomous Adaptive Planning Engine**: Stateful Expected Value planner (`--planner ev_adaptive`) with multi-dimensional budget enforcement (probes, turns, prompt/output tokens, cost, time), dynamic mutation, and signal-driven branch refinement.
+- **Cryptographic Evidence DAG & Confirmation Engine**: Verifiable Merkle DAG tracking attack-to-finding lineage with SHA-256 integrity checks, four-tier confirmation policy (*Suspected $\to$ Corroborated $\to$ Confirmed $\to$ Disproven*), and Graphviz DOT export.
+- **Target Capability Profiler**: Active and passive capability detection across 16 dimensions (function calling, tools, RAG, memory, structured JSON) with strict evidence gating ("never infer capabilities without evidence").
+- **Deterministic Offline Replay**: Audit and reproduce attack trajectories offline with bit-exact determinism and budget enforcement (`rtl replay --manifest report.json --max-probes N`).
+- **Multi-Target Comparative Campaigns & Differential Analysis**: Multi-target evaluations (`rtl campaign`) with per-target budget isolation, checkpoint resume, and target-aware regression diffing (`rtl diff`).
+- **Bounded Agent & Tool Runtime**: Pre-execution validation, schema enforcement, payload bounds, and execution sandboxing for simulated tool execution (`rtl/tools/`).
+- **Multi-step scenarios**: Agent browsing (poisoned web content), RAG poisoning, memory poisoning, tool poisoning, conversation jailbreak, and a documented multimodal stub.
+- **Pluggable targets**: `openai`, `anthropic`, `ollama`, and deterministic `mock` (no API key needed; used by CI and offline testing).
+- **Optional external engines**: Integration wrappers around [garak](https://github.com/NVIDIA/garak) and [PyRIT](https://github.com/Azure/PyRIT).
+- **Evidence-based evaluation & judge robustness**: LLM-as-judge with heuristic fallback, prompt-injection resistant judging, structured outcome models, and explainable severity rationales.
+- **Safer error handling & secret scrubbing**: Scrubbing of sensitive values and credentials in supported logs and report data.
+- **Comprehensive Multi-Format Reports**:
+  - Standalone HTML with interactive charts, ATLAS crosswalk, and plan traces (no external CDN dependencies).
+  - SARIF v2.1.0 for GitHub Advanced Security and CI/CD code scanning.
+  - GitHub-Flavored Markdown executive briefs for PR reviews.
+  - Machine-readable JSON with full evidence metadata.
   - Optional PDF export via ReportLab.
-- **100% offline demo** — `rtl scan --target mock` runs the whole pipeline
-  with zero credentials.
+- **100% Offline Workflow**: Run complete scans and campaigns against mock targets with zero credentials or external dependencies.
 
 ## Quickstart
 
+### Requirements
+
+- Python 3.11 or 3.12
+- `pip` and `venv`
+- API credentials only when testing external hosted models
+
+### Install
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -e ".[dev,pdf]"
+```
 
-# Fully offline demo against the deterministic mock target
+### Run the Offline Demo
+
+```bash
+# Basic scan against deterministic mock target
 rtl scan --target mock --suite suites/quick.yaml --output reports
-open reports/report.html
 
-# Run adaptive red-teaming with stateful heuristic planning
-rtl scan --target mock --suite suites/quick.yaml --planner heuristic --output reports/adaptive
+# Autonomous adaptive scan with Expected Value planner and per-target budget
+rtl scan --target mock:cooperative --suite suites/quick.yaml --planner ev_adaptive --budget-probes 5 --output reports/adaptive
 
-# Replay a recorded scan trajectory offline with bit-exact determinism
-rtl replay --manifest reports/adaptive/report.json --output reports/replay
+# Deterministically replay recorded scan manifest offline
+rtl replay --manifest reports/adaptive/report.json --max-probes 5 --output reports/replay
 
 # Run detection quality benchmarks against versioned golden datasets
 rtl benchmark --version 3
+```
 
-# Against a local Ollama model (needs a running server)
+Open `reports/report.html` in your browser to inspect the interactive report.
+
+### Run Against a Local Ollama Model
+
+Start Ollama and ensure the target model is available locally, then run:
+
+```bash
 rtl scan --target ollama:llama3.1 --suite suites/quick.yaml --output reports/ollama
 ```
 
-More runnable examples in `rtl/examples/`, including
-`demo_against_ollama.sh` and the bundled sample report.
+More runnable examples are available in `examples/`, including `demo_against_ollama.sh`.
 
-## CLI
+## CLI Commands
 
 | Command | Purpose |
 |---|---|
-| `rtl scan` | Run a suite and produce JSON, HTML, SARIF, and Markdown reports (`--planner ev_adaptive`) |
-| `rtl campaign` | Multi-target comparative campaign orchestration with checkpoint resume |
-| `rtl profile` | Inspect target security capability envelope and diagnostic probe telemetry |
-| `rtl evidence` | Cryptographic evidence DAG verification and Graphviz DOT export |
-| `rtl diff` | Security regression and differential comparison between scans |
-| `rtl replay` | Deterministically replay a recorded scan manifest offline |
-| `rtl benchmark` | Benchmark detection quality against versioned golden datasets |
+| `rtl scan` | Run an attack suite against a target and produce multi-format reports (`--planner ev_adaptive`) |
+| `rtl campaign` | Multi-target comparative campaign orchestration with differential analysis and checkpoint resume |
+| `rtl profile` | Discover and inspect target capability envelope (`--probe` / `--no-probe`) |
+| `rtl evidence` | Cryptographic evidence DAG verification and Graphviz DOT export (`--export-dot`) |
+| `rtl diff` | Security regression diff (same target) or architectural divergence comparison (cross target) |
+| `rtl replay` | Deterministically replay recorded scan manifests offline with optional `--max-probes` budget |
+| `rtl benchmark` | Benchmark detection quality against versioned golden datasets (`--version 1/2/3`) |
 | `rtl list-suites` | List bundled YAML suites |
-| `rtl list-attacks` | Show the probe library by category |
-| `rtl report` | Regenerate reports (HTML, JSON, PDF, SARIF, Markdown) from `report.json` |
-| `rtl target` | Inspect a target spec / list providers |
+| `rtl list-attacks` | Show probe library categorized with ATLAS IDs |
+| `rtl report` | Regenerate reports (HTML, JSON, PDF, SARIF, Markdown) from an existing `report.json` |
+| `rtl target` | Inspect target specifications or list supported provider defaults |
 | `rtl version` | Print the installed version |
 
-Target syntax is `provider:model`, e.g. `openai:gpt-4o`,
-`anthropic:claude-3-5-sonnet`, `ollama:llama3.1`, or `mock`.
+Target syntax uses `provider:model`, for example:
+- `openai:gpt-4o`
+- `anthropic:claude-3-5-sonnet`
+- `ollama:llama3.1`
+- `mock:cooperative`, `mock:defensive`, `mock:leaky`, `mock:echo`
 
 ## Suites
 
-YAML files in `rtl/suites/` define what runs: probe categories, explicit probe
-IDs, caps, scenarios, and external engines. They ship inside the package, so
-`--suite quick.yaml` (or `--suite suites/quick.yaml`) works from any directory.
+YAML files in `suites/` (and bundled in `rtl/suites/`) configure probe selection, categories, execution caps, scenarios, and optional external engines:
 
-- `quick.yaml` — 15-min smoke suite (3 probes per category + 2 scenarios)
-- `full.yaml` — every probe + all scenarios (~1h)
-- `custom-template.yaml` — starting point for your own sweep
+- `quick.yaml` — Fast smoke-test suite for CI validation and rapid checks.
+- `full.yaml` — Comprehensive scan covering all probes and multi-step scenarios.
+- `custom-template.yaml` — Starting point for customized organizational security suites.
+
+## Evaluation & Confirmation
+
+The evaluation pipeline combines model-based judging with an offline heuristic fallback and prompt-injection-resistant judge defense:
+
+- **Evidence Graph**: Every probe execution, tool call, and response excerpt is tracked in a cryptographic DAG with SHA-256 node hashes.
+- **Four-Tier Confirmation**:
+  - `SUSPICIOUS`: Single anomalous output or partial match.
+  - `CORROBORATED`: Multi-signal evidence (e.g. tool execution + canary hint).
+  - `CONFIRMED`: Verified compromise (assertive canary extraction or reproducible exploitation).
+  - `DISPROVEN`: Initial suspicion refuted by targeted verification probes.
+- **Explainable Severity**: MITRE ATLAS taxonomy mapping with explainable reasoning and remediation guidance.
+
+## Reporting & Secret Handling
+
+The reporting layer generates:
+- **JSON**: Complete machine-readable scan artifacts and replay manifests.
+- **HTML**: Standalone, interactive visual reports with CSS charts and ATLAS crosswalks.
+- **SARIF**: Static Analysis Results Interchange Format (v2.1.0) for GitHub Advanced Security.
+- **Markdown**: Executive briefs formatted with GitHub alert callouts.
+- **PDF**: Executive presentation reports generated via ReportLab.
+
+Secret scrubbing is applied across reports and log outputs to redact API keys, tokens, and sensitive system prompt excerpts.
 
 ## Architecture
 
-```
+```text
 rtl/
-├── config.py          Target/Suite/ScanOptions models, budget limits, YAML loading
-├── runner.py          Scan orchestrator (targets → planning → judge → reports)
-├── cli.py             typer CLI (scan, replay, benchmark, report, target)
-├── planning/          AdaptiveEngine, BudgetLedger, HeuristicPlanner, ReplayTarget
-├── agents/            AgentRuntime with turn and tool call bounding
-├── tools/             ToolExecutor, multi-protocol parser, sandboxed simulation
-├── targets/           openai · anthropic · ollama · mock · replay (+ retry/backoff)
-├── engines/           garak & PyRIT wrappers (optional)
-├── attacks/           probe model, loader/validation, 5 prompt libraries
-├── scenarios/         agent_browsing · rag_poisoning · tool_poisoning · memory_poisoning
-├── evaluation/        ATLAS registry, judge (LLM + heuristic), verdict policy, harness
-├── reporting/         models, HTML/JSON/PDF/SARIF/Markdown reporters
-├── suites/            quick · full · custom-template (bundled in the package)
-├── examples/          poisoned fixtures, sample report, Ollama demo (bundled)
-└── utils/             files, text heuristics, secret scrubbing
-docs/                  architecture, adding-new-attacks, ethics, ATLAS map
-tests/                 477 tests (pytest, comprehensive coverage across all layers)
+├── config.py          Target, Suite, BudgetLimits, and ScanOptions configuration
+├── runner.py          Scan orchestration and outcome collection
+├── cli.py             Typer CLI (scan, campaign, profile, evidence, diff, replay, etc.)
+├── core/              Cryptographic EvidenceGraph and ConfirmationEngine
+├── planning/          AdaptiveEngine, Expected Value Planner, BudgetLedger, ReplayTarget
+├── profiler/          ActiveProfiler and PassiveProfiler capability detectors
+├── memory/            AttackMemoryStore tracking successful techniques and target resistance
+├── mutation/          MutationEngine (base64, academic, roleplay, cognitive overload)
+├── campaign/          CampaignManager, differential testing, and checkpoint state
+├── agents/            AgentRuntime with turn, timeout, and tool call bounds
+├── tools/             ToolExecutor, multi-protocol tool parser, sandboxed simulation
+├── targets/           OpenAI, Anthropic, Ollama, deterministic Mock, and Replay targets
+├── engines/           Optional garak and PyRIT integration wrappers
+├── attacks/           Probe models, loader, validation, and prompt libraries
+├── scenarios/         Agent browsing, RAG poisoning, tool poisoning, memory poisoning
+├── evaluation/        ATLAS registry, Judge (LLM + heuristic), VerdictPolicy, Harness
+├── reporting/         HTML, JSON, PDF, SARIF, Markdown reporters, and diffing engine
+├── suites/            Bundled YAML scan suites
+├── examples/          Demonstrations, poisoned fixtures, and sample reports
+└── utils/             Text heuristics, atomic file operations, and secret scrubbing
+
+docs/                  Architecture, technical audit, specifications, ethics, and roadmap
+tests/                 544 automated tests (pytest, >=91% comprehensive coverage)
 ```
-
-## Ethical use & authorization
-
-This tool ships **attack content**. You must have written authorization from
-the system owner before running any probe against a live system. See
-`DISCLAIMER.md` and `docs/ethics.md`. The `mock` target and the RAG/agent
-fixtures are self-contained — you can learn the entire workflow offline.
 
 ## Development
 
+Install development dependencies:
+
 ```bash
-make setup          # venv + editable install with dev deps
-make test           # pytest
-make cov            # pytest --cov (≥55% total gate)
-make lint           # ruff check + format
-make typecheck      # mypy (strict-ish, py311)
-make run            # demo: mock scan → reports/
-make zip            # build llm-redteam-lab.zip (excludes .venv/.git)
+pip install -e ".[dev,pdf]"
 ```
+
+Run tests:
+
+```bash
+pytest -q
+```
+
+Run linting:
+
+```bash
+ruff check .
+ruff format --check .
+```
+
+Run type checking:
+
+```bash
+mypy rtl
+```
+
+## Documentation
+
+Consult the repository documentation for architecture, threat mapping, specifications, and audit notes:
+
+- [Implementation Notes](IMPLEMENTATION_NOTES.md)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [Disclaimer](DISCLAIMER.md)
+- [MITRE ATLAS mapping and specifications](docs/)
+- [Technical Audit](docs/audit/TECHNICAL_AUDIT.md)
+- [Implementation Roadmap](docs/audit/IMPLEMENTATION_ROADMAP.md)
+
+Audit documents describe the scope and findings of the corresponding review; they should not be interpreted as independent certification or proof that all security issues have been resolved.
+
+## Ethical Use and Authorization
+
+This framework contains adversarial prompts and testing scenarios. Obtain explicit authorization from the system owner before running probes against live systems, and follow applicable rules of engagement, program scope, and data-handling requirements.
+
+The mock target and local fixtures support offline experimentation without sending probes to external services. Do not use the framework to access data, systems, or accounts without permission.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The MITRE ATLAS IDs reference the
-[ATLAS framework](https://atlas.mitre.org); ATLAS® and ATT&CK® are registered
-trademarks of The MITRE Corporation.
+MIT — see [LICENSE](LICENSE).
+
+MITRE ATLAS identifiers are referenced for threat classification. MITRE ATLAS® and ATT&CK® are trademarks of The MITRE Corporation.

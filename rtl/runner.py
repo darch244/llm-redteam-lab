@@ -7,6 +7,7 @@ multiple probes concurrently in future versions.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +26,7 @@ from rtl.reporting.models import Finding, ProbeResult, ReportMeta, ScanResult
 from rtl.reporting.sarif_reporter import render_sarif
 from rtl.scenarios import SCENARIOS, ScenarioError, ScenarioUnsupported
 from rtl.utils.files import ensure_dir
+from rtl.utils.secrets import scrub, scrub_dict, scrub_message
 
 if TYPE_CHECKING:
     from rtl.attacks.model import AttackPrompt
@@ -145,10 +147,42 @@ async def run_scan(options: ScanOptions, *, dry: bool = False) -> ScanResult:
                 response = await target.asend(prompt)
                 elapsed = time.monotonic() - t0
             except Exception as exc:
-                log.error("probe %s failed: %s", attack.attack_id, exc)
-                findings.append(_execution_error_finding(attack, effective_prompt, target_fp, exc))
+                # scrub + truncate before persisting: exception text may contain
+                # API keys, tokens or secret-bearing URLs from the transport layer
+                error_text = scrub_message(f"{type(exc).__name__}: {exc}")
+                log.error("probe %s failed: %s", attack.attack_id, error_text)
+                severity = SeverityResult(
+                    level="info",
+                    score=0,
+                    blocked=False,
+                    rationale=[f"probe did not complete — target error: {error_text}"],
+                )
+                verdict = JudgeVerdict(
+                    label="ambiguous",
+                    success=False,
+                    confidence=0.0,
+                    reason="probe did not complete; target raised an exception",
+                    source="heuristic",
+                    outcome="failed",
+                )
+                probe_result = ProbeResult(
+                    probe=attack,
+                    response="",
+                    error=error_text,
+                    effective_prompt=effective_prompt,
+                    raw={
+                        "verdict": verdict.to_dict(),
+                        "severity": severity.to_dict(),
+                        "error_class": type(exc).__name__,
+                        "expected": list(attack.expected),
+                        "evidence_hit": False,
+                    },
+                    elapsed_seconds=time.monotonic() - t0,
+                )
+                findings.append(probe_result.to_finding(verdict, severity, target_fp))
                 continue
 
+            expected = list(attack.expected)
             probe_result = ProbeResult(
                 probe=attack,
                 response=response,
@@ -156,12 +190,28 @@ async def run_scan(options: ScanOptions, *, dry: bool = False) -> ScanResult:
                 raw={},
                 elapsed_seconds=elapsed,
             )
-            # One evaluation per response. VerdictPolicy forwards the probe's raw
-            # evidence so the judge's tool-evidence gate still runs; it does not
-            # duplicate or reinterpret the judge's rules.
-            verdict = verdict_policy.evaluate(probe_result, prompt=prompt)
+            try:
+                verdict = verdict_policy.evaluate(probe_result, prompt=prompt)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # the response is already captured — never drop the probe
+                judge_error = scrub_message(f"{type(exc).__name__}: {exc}")
+                log.error("judge failed for %s: %s", attack.attack_id, judge_error)
+                verdict = JudgeVerdict(
+                    label="ambiguous",
+                    success=False,
+                    confidence=0.0,
+                    reason=f"judge layer failed; deterministic result unavailable ({judge_error})",
+                    source="heuristic",
+                    outcome="suspected",
+                )
             severity = severity_score(attack, verdict)
-            probe_result.raw = {"verdict": verdict.to_dict(), "severity": severity.to_dict()}
+            probe_result.raw = {
+                "verdict": verdict.to_dict(),
+                "severity": severity.to_dict(),
+                "expected": expected,
+                "evidence_hit": verdict.evidence_hit,
+            }
             findings.append(probe_result.to_finding(verdict, severity, target_fp))
             log.info(
                 "  %s -> %s (conf %.2f, severity %s)",
@@ -266,37 +316,96 @@ async def _run_scenarios(
         try:
             results = await run_fn(target, config=options.suite.scenario_configs.get(name, {}))
         except ScenarioUnsupported as exc:
-            log.warning("scenario %s unsupported: %s", name, exc)
-            outcomes.append({"scenario": name, "status": "unsupported", "error": str(exc)})
+            error_text = scrub_message(str(exc))
+            log.warning("scenario %s unsupported: %s", name, error_text)
+            outcomes.append(
+                {
+                    "scenario": name,
+                    "status": "unsupported",
+                    "stage": "runner",
+                    "error": error_text,
+                }
+            )
             continue
         except ScenarioError as exc:
-            log.error("scenario %s failed: %s", name, exc)
-            outcomes.append({"scenario": name, "status": "error", "error": str(exc)})
+            error_text = scrub_message(str(exc))
+            log.error("scenario %s failed: %s", name, error_text)
+            outcomes.append(
+                {
+                    "scenario": name,
+                    "status": "error",
+                    "stage": "runner",
+                    "error": error_text,
+                }
+            )
+            continue
+        except Exception as exc:  # target/storage errors must not abort the scan
+            error_text = scrub_message(f"{type(exc).__name__}: {exc}")
+            log.error("scenario %s errored: %s", name, error_text)
+            outcomes.append(
+                {
+                    "scenario": name,
+                    "status": "error",
+                    "stage": "runner",
+                    "error": error_text,
+                }
+            )
             continue
 
         for pr in results:
+            context = _scenario_probe_context(pr)
             if pr.skipped:
                 outcomes.append(
                     {
                         "scenario": name,
                         "status": "skipped",
-                        "probe_id": pr.probe.attack_id,
-                        "error": pr.error,
+                        **context,
+                        "error": scrub_message(pr.error) if pr.error else None,
                     }
                 )
                 continue
-            verdict = judge.evaluate(
-                pr.probe.prompt,
-                pr.response,
-                pr.probe.category,
-                canary=pr.probe.canary,
-                raw=pr.raw,
-                probe_result=pr,
-            )
-            severity = severity_score(pr.probe, verdict, scenario=name)
-            finding = pr.to_finding(verdict, severity, target_fp, scenario=name)
-            entry = finding.model_dump(mode="json")
+            try:
+                verdict = judge.evaluate(
+                    pr.probe.prompt,
+                    pr.response,
+                    pr.probe.category,
+                    expected=list(pr.probe.expected) or None,
+                    scenario=name,
+                    canary=pr.probe.canary,
+                    raw=pr.raw,
+                    probe_result=pr,
+                )
+                severity = severity_score(pr.probe, verdict, scenario=name)
+                finding = pr.to_finding(verdict, severity, target_fp, scenario=name)
+                entry = finding.model_dump(mode="json")
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # never drop already-captured scenario evidence
+                error_text = scrub_message(f"{type(exc).__name__}: {exc}")
+                log.error(
+                    "scenario %s/%s evaluation failed: %s",
+                    name,
+                    pr.probe.attack_id,
+                    error_text,
+                )
+                outcomes.append(
+                    {
+                        "scenario": name,
+                        "status": "error",
+                        "outcome": "suspected",
+                        **context,
+                        "error": error_text,
+                        "response": scrub(pr.response),
+                        "raw": scrub_dict(pr.raw),
+                        "expected": list(pr.probe.expected),
+                        "evidence_hit": None,
+                    }
+                )
+                continue
             entry["scenario"] = name
+            entry["raw"] = dict(entry.get("raw") or {})
+            entry["raw"]["expected"] = list(pr.probe.expected)
+            entry["raw"]["evidence_hit"] = verdict.evidence_hit
             outcomes.append(entry)
             log.info(
                 "scenario %s: %s -> %s (severity %s)",
@@ -306,6 +415,20 @@ async def _run_scenarios(
                 severity.level,
             )
     return outcomes
+
+
+def _scenario_probe_context(pr: ProbeResult) -> dict[str, Any]:
+    """Identity/context preserved on skipped or failed scenario evaluations."""
+    return {
+        "probe_id": pr.probe.attack_id,
+        "name": pr.probe.name,
+        "category": pr.probe.category,
+        "technique": pr.probe.technique,
+        "prompt": scrub(pr.probe.prompt),
+        "atlas_ids": [pr.probe.atlas_id],
+        "expected": list(pr.probe.expected),
+        "elapsed_seconds": pr.elapsed_seconds,
+    }
 
 
 def _version() -> str:

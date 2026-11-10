@@ -57,6 +57,8 @@ def _build(category: str, entry: dict[str, object], index: int) -> AttackPrompt:
     tags = tuple(str(t) for t in tags_raw) if isinstance(tags_raw, list) else ()
     canary_raw = entry.get("canary")
     canary = str(canary_raw) if canary_raw is not None else None
+    expected_raw = entry.get("expected")
+    expected = tuple(str(m) for m in expected_raw) if isinstance(expected_raw, list) else ()
     return AttackPrompt(
         attack_id=f"{category[:2].upper()}-{int(index) + 1:02d}",
         category=category,
@@ -69,6 +71,7 @@ def _build(category: str, entry: dict[str, object], index: int) -> AttackPrompt:
         rationale=str(entry["rationale"]),
         tags=tags,
         canary=canary,
+        expected=expected,
     )
 
 

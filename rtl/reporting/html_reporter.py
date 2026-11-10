@@ -9,14 +9,14 @@ renders offline) and full reproduction steps per finding.
 from __future__ import annotations
 
 import pathlib
-from typing import Any
+from typing import Any, cast
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from rtl.evaluation.atlas import ATLAS_MAP
-from rtl.reporting.models import ScanResult
+from rtl.reporting.models import ScanResult, scenario_status_counts
 from rtl.utils.files import ensure_dir
-from rtl.utils.secrets import scrub
+from rtl.utils.secrets import scrub, scrub_dict
 
 _TEMPLATE_DIR = pathlib.Path(__file__).resolve().parent / "templates"
 
@@ -35,11 +35,16 @@ def _build_context(result: ScanResult, *, redact: bool = True) -> dict[str, obje
     _scrub = _redactor(redact)
     findings = []
     for finding in result.findings:
-        item = finding.model_dump(mode="json")
+        raw_item = finding.model_dump(mode="json")
+        item = cast(dict[str, Any], scrub_dict(raw_item)) if redact else raw_item
         item["response_excerpt"] = _scrub(finding.response)[:800]
         item["prompt_excerpt"] = _scrub(finding.prompt)[:500]
-        item["effective_prompt_excerpt"] = _scrub(finding.effective_prompt)[:500] if finding.effective_prompt else ""
-        item["atlas_names"] = [ATLAS_MAP.get(tech, {}).get("name", tech) for tech in finding.atlas_ids]
+        item["effective_prompt_excerpt"] = (
+            _scrub(finding.effective_prompt)[:500] if finding.effective_prompt else ""
+        )
+        item["atlas_names"] = [
+            ATLAS_MAP.get(tech, {}).get("name", tech) for tech in item.get("atlas_ids", [])
+        ]
         findings.append(item)
 
     severity_order = ["critical", "high", "medium", "low", "info"]
@@ -70,14 +75,15 @@ def _build_context(result: ScanResult, *, redact: bool = True) -> dict[str, obje
     ]
 
     return {
-        "meta": result.meta.model_dump(mode="json"),
-        "summary": result.summary.model_dump(mode="json"),
+        "meta": scrub_dict(result.meta.model_dump(mode="json")) if redact else result.meta.model_dump(mode="json"),
+        "summary": scrub_dict(result.summary.model_dump(mode="json")) if redact else result.summary.model_dump(mode="json"),
         "findings": findings,
         "scenario_outcomes": [_scenario_row(outcome, redact=redact) for outcome in result.scenario_outcomes],
+        "scenario_counts": scenario_status_counts(result.scenario_outcomes),
         "distribution": distribution,
         "max_severity": max_severity,
-        "atlas_crosswalk": atlas_crosswalk,
-        "engine_results": result.engine_results,
+        "atlas_crosswalk": scrub_dict(atlas_crosswalk) if redact else atlas_crosswalk,
+        "engine_results": scrub_dict(result.engine_results) if redact else result.engine_results,
         "adaptive": result.adaptive,
     }
 
@@ -101,19 +107,24 @@ def _scenario_row(outcome: dict[str, Any], *, redact: bool = True) -> dict[str, 
             reason = str(verdict.get("reason", "") or "")
     response = outcome.get("response")
     attack_id = outcome.get("attack_id") or outcome.get("probe_id")
+    status_label = str(outcome.get("status") or outcome.get("outcome") or "judged")
+    error = outcome.get("error")
     return {
         "scenario": outcome.get("scenario") or "—",
         "attack_id": attack_id or "—",
+        "probe_label": attack_id or "—",
         "name": outcome.get("name") or "",
         "status": outcome.get("status", "judged"),
+        "status_label": status_label,
         "verdict_label": outcome.get("verdict_label"),
         "severity": outcome.get("severity"),
         "success": outcome.get("success"),
         "confidence": outcome.get("confidence"),
         "judge_source": outcome.get("judge_source"),
-        "error": outcome.get("error"),
+        "error": error,
+        "error_excerpt": _scrub(str(error))[:800] if error else "",
         "reason": _scrub(reason)[:300] if reason else "",
-        "response_excerpt": _scrub(str(response))[:300] if response else "",
+        "response_excerpt": _scrub(str(response))[:800] if response else "",
     }
 
 

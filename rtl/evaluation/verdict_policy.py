@@ -26,21 +26,19 @@ if TYPE_CHECKING:
     from rtl.reporting.models import ProbeResult
 
 
-def _accepts_evidence_kwargs(evaluate: Any) -> bool:
-    """Return True when ``evaluate`` can receive ``raw`` and ``probe_result``.
-
-    The real :meth:`Judge.evaluate` accepts both (and ``**kwargs``). Some
-    custom/legacy judge implementations in tests and integrations only accept
-    the original ``canary`` keyword; the policy keeps supporting them without
-    ever making a second production call.
-    """
+def _supported_kwargs(evaluate: Any) -> tuple[bool, bool, bool]:
+    """Inspect parameters accepted by ``evaluate``."""
     try:
         parameters = inspect.signature(evaluate).parameters
     except (TypeError, ValueError):  # pragma: no cover - exotic callables
-        return True
+        return True, True, True
     if any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()):
-        return True
-    return {"raw", "probe_result"} <= set(parameters)
+        return True, True, True
+    param_names = set(parameters)
+    can_evidence = {"raw", "probe_result"} <= param_names
+    can_canary = "canary" in param_names
+    can_expected = "expected" in param_names
+    return can_evidence, can_canary, can_expected
 
 
 class VerdictPolicy:
@@ -48,7 +46,11 @@ class VerdictPolicy:
 
     def __init__(self, judge: Judge) -> None:
         self._judge = judge
-        self._evidence_kwargs = _accepts_evidence_kwargs(judge.evaluate)
+        (
+            self._evidence_kwargs,
+            self._can_canary,
+            self._can_expected,
+        ) = _supported_kwargs(judge.evaluate)
 
     @property
     def judge(self) -> Judge:
@@ -69,20 +71,20 @@ class VerdictPolicy:
             The judge's verdict, including any evidence-aware downgrade.
         """
         sent_prompt = probe_result.probe.prompt if prompt is None else prompt
+        expected = list(probe_result.probe.expected) or None
+        kwargs: dict[str, Any] = {}
+        if self._can_canary:
+            kwargs["canary"] = probe_result.probe.canary
+        if self._can_expected and expected is not None:
+            kwargs["expected"] = expected
         if self._evidence_kwargs:
-            return self._judge.evaluate(
-                sent_prompt,
-                probe_result.response,
-                probe_result.probe.category,
-                canary=probe_result.probe.canary,
-                raw=probe_result.raw,
-                probe_result=probe_result,
-            )
+            kwargs["raw"] = probe_result.raw
+            kwargs["probe_result"] = probe_result
         return self._judge.evaluate(
             sent_prompt,
             probe_result.response,
             probe_result.probe.category,
-            canary=probe_result.probe.canary,
+            **kwargs,
         )
 
 

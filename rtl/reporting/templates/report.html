@@ -71,9 +71,12 @@
 <h2>Executive summary</h2>
 <div class="stat-grid">
   <div class="stat"><div class="num">{{ summary.total }}</div><div class="lbl">probes run</div></div>
-  <div class="stat"><div class="num" style="color:var(--critical)">{{ summary.succeeded }}</div><div class="lbl">succeeded</div></div>
-  <div class="stat"><div class="num" style="color:var(--low)">{{ summary.refused }}</div><div class="lbl">refused</div></div>
-  <div class="stat"><div class="num" style="color:var(--medium)">{{ summary.ambiguous }}</div><div class="lbl">ambiguous</div></div>
+  <div class="stat"><div class="num" style="color:var(--critical)">{{ summary.confirmed }}</div><div class="lbl">confirmed (evidence)</div></div>
+  <div class="stat"><div class="num" style="color:var(--medium)">{{ summary.suspected }}</div><div class="lbl">suspected (review)</div></div>
+  <div class="stat"><div class="num">{{ summary.inconclusive }}</div><div class="lbl">inconclusive</div></div>
+  <div class="stat"><div class="num" style="color:var(--high)">{{ summary.failed }}</div><div class="lbl">failed (refused &amp; errors within)</div></div>
+  <div class="stat"><div class="num" style="color:var(--low)">{{ summary.refused }}</div><div class="lbl">refused — subset of failed</div></div>
+  <div class="stat"><div class="num" style="color:var(--high)">{{ summary.errors }}</div><div class="lbl">target errors — subset of failed</div></div>
   <div class="stat"><div class="num">{{ summary.blocked }}</div><div class="lbl">guardrailed</div></div>
   <div class="stat"><div class="num" style="color:var(--critical)">{{ summary.errors }}</div><div class="lbl">execution errors</div></div>
   <div class="stat"><div class="num" style="color:var(--accent)">{{ summary.scenarios_total }}</div><div class="lbl">scenarios run</div></div>
@@ -121,13 +124,16 @@
   </div>
   <div class="muted" style="margin-top:4px">
     Category {{ f.category.replace('_',' ') }} · technique <i>{{ f.technique }}</i> ·
-    verdict <b>{{ f.verdict_label }}</b> · confidence {{ "%.2f"|format(f.confidence) }} · judge {{ f.judge_source }}
+    verdict <b>{{ f.verdict_label }}</b> · outcome <b>{{ f.outcome }}</b> · confidence {{ "%.2f"|format(f.confidence) }} · judge {{ f.judge_source }}
     {% if f.scenario %} · scenario <b>{{ f.scenario }}</b>{% endif %}
     {%- if f.blocked %} · <span style="color:var(--low)">guardrailed</span>{% endif %}
   </div>
 
   {% if f.skipped %}
-    <div class="muted"><b style="color:var(--critical)">Execution error</b>: {{ f.error or "probe skipped — no security conclusion" }}</div>
+    <div class="muted">{% if f.error and ("connection" in f.error or "execution" in f.error) %}<b style="color:var(--critical)">Execution error</b>: {{ f.error }}{% else %}Skipped: {{ f.error or "not applicable" }}{% endif %}</div>
+  {% elif f.error %}
+    <div class="response blocked"><b>Error running this probe:</b>
+{{ f.error }}</div>
   {% else %}
     <div class="response {{ 'ok' if f.success else ('blocked' if f.blocked else 'ambig') }}">{{ f.response_excerpt }}</div>
   {% endif %}
@@ -167,21 +173,34 @@
 {% endfor %}
 
 {% if scenario_outcomes %}
-<h2>Scenario outcomes</h2>
+<!-- Scenario outcomes -->
+<h2>Scenarios</h2>
+<div class="stat-grid">
+  <div class="stat"><div class="num">{{ scenario_counts['total'] }}</div><div class="lbl">scenario results</div></div>
+  <div class="stat"><div class="num" style="color:var(--critical)">{{ scenario_counts['confirmed'] }}</div><div class="lbl">confirmed (evidence)</div></div>
+  <div class="stat"><div class="num" style="color:var(--medium)">{{ scenario_counts['suspected'] }}</div><div class="lbl">suspected (review)</div></div>
+  <div class="stat"><div class="num">{{ scenario_counts['inconclusive'] }}</div><div class="lbl">inconclusive</div></div>
+  <div class="stat"><div class="num" style="color:var(--high)">{{ scenario_counts['failed'] }}</div><div class="lbl">failed</div></div>
+  <div class="stat"><div class="num" style="color:var(--high)">{{ scenario_counts['error'] }}</div><div class="lbl">errors</div></div>
+  <div class="stat"><div class="num">{{ scenario_counts['skipped'] }}</div><div class="lbl">skipped</div></div>
+  <div class="stat"><div class="num">{{ scenario_counts['unsupported'] }}</div><div class="lbl">unsupported</div></div>
+</div>
 <div class="panel">
   <table>
-    <tr><th>Scenario</th><th>Probe</th><th>Status</th><th>Verdict</th><th>Severity</th><th>Evidence / error</th></tr>
+    <tr><th>Scenario</th><th>Probe</th><th>Status</th><th>Severity</th><th>Evidence</th></tr>
     {% for s in scenario_outcomes %}
     <tr>
-      <td>{{ s.scenario }}</td>
-      <td>{{ s.attack_id }}</td>
-      <td>{{ s.status }}</td>
-      <td>{% if s.verdict_label %}<b>{{ s.verdict_label }}</b>{% if s.success %} <span class="pill">landed</span>{% endif %}{% else %}—{% endif %}</td>
-      <td>{% if s.severity %}<span class="badge b-{{ s.severity }}">{{ s.severity }}</span>{% else %}—{% endif %}</td>
+      <td>{{ s.get('scenario', '—') }}</td>
+      <td>{{ s.get('probe_label') }}</td>
+      <td><b>{{ s.get('status_label') }}</b>
+        {%- if s.get('verdict_label') %} · {{ s.get('verdict_label') }}{% if s.get('success') %} <span class="pill">landed</span>{% endif %}{% endif %}
+        {%- if s.get('status') and s.get('outcome') %} <span class="muted">(outcome: {{ s.get('outcome') }})</span>{% endif %}</td>
+      <td>{{ s.get('severity', '—') }}</td>
       <td>
-        {% if s.error %}<span style="color:var(--critical)">{{ s.error }}</span>{% endif %}
-        {% if s.reason %}<div class="muted">{{ s.reason }}</div>{% endif %}
-        {% if s.response_excerpt %}<div class="prompt">{{ s.response_excerpt }}</div>{% endif %}
+        {% if s.get('error_excerpt') %}<div class="muted"><b>Error:</b> {{ s.get('error_excerpt') }}</div>{% endif %}
+        {% if s.get('reason') %}<div class="muted">{{ s.get('reason') }}</div>{% endif %}
+        {% if s.get('response_excerpt') %}<div class="response ambig">{{ s.get('response_excerpt') }}</div>{% endif %}
+        {% if not s.get('error_excerpt') and not s.get('response_excerpt') and not s.get('reason') %}<span class="muted">—</span>{% endif %}
       </td>
     </tr>
     {% endfor %}
