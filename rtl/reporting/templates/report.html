@@ -130,7 +130,7 @@
   </div>
 
   {% if f.skipped %}
-    <div class="muted">{% if f.error and ("connection" in f.error or "execution" in f.error) %}<b style="color:var(--critical)">Execution error</b>: {{ f.error }}{% else %}Skipped: {{ f.error or "not applicable" }}{% endif %}</div>
+    <div class="muted">{% if f.is_execution_error %}<b style="color:var(--critical)">Execution error</b>: {{ f.error }}{% else %}Skipped: {{ f.error or "not applicable" }}{% endif %}</div>
   {% elif f.error %}
     <div class="response blocked"><b>Error running this probe:</b>
 {{ f.error }}</div>
@@ -214,9 +214,9 @@
   <table>
     <tr><th>Engine</th><th>Status</th><th>Detail</th></tr>
     {% for e in engine_results %}
-    <tr><td>{{ e.engine }}</td><td>{{ e.status }}</td><td>{{ e.detail }}</td></tr>
-    {% for r in e.results|default([]) %}
-    <tr><td></td><td>↳ {{ r.probe_id }}</td><td>{{ r.success }} — {{ r.summary }}</td></tr>
+    <tr><td>{{ e.get('engine', '—') if e is mapping else e }}</td><td>{{ e.get('status', '—') if e is mapping else '—' }}</td><td>{{ (e.get('detail') or e.get('summary', '—')) if e is mapping else '—' }}</td></tr>
+    {% for r in e.get('results', []) if e is mapping %}
+    <tr><td></td><td>↳ {{ r.get('probe_id', '—') }}</td><td>{{ r.get('success', '') }} — {{ r.get('summary', '') }}</td></tr>
     {% endfor %}
     {% endfor %}
   </table>

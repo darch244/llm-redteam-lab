@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from rtl.attacks.model import AttackPrompt
 from rtl.evaluation.judge import OUTCOMES, JudgeVerdict
@@ -160,6 +160,16 @@ class Finding(BaseModel):
     error: str | None = None
     timestamp: datetime = Field(default_factory=_utcnow)
 
+    @computed_field  # type: ignore[misc]
+    @property
+    def is_execution_error(self) -> bool:
+        if not self.error:
+            return False
+        if not self.skipped:
+            return True
+        err_low = self.error.lower()
+        return not ("not support" in err_low or "not applicable" in err_low or "unsupported" in err_low)
+
     @field_validator("verdict_label")
     @classmethod
     def _known_verdict(cls, value: str) -> str:
@@ -260,7 +270,7 @@ class ScanResult(BaseModel):
                 for f in self.findings
                 if f.outcome == "inconclusive" or f.outcome not in {"confirmed", "suspected", "failed"}
             ),
-            errors=sum(1 for f in self.findings if f.error and not f.skipped),
+            errors=sum(1 for f in self.findings if f.is_execution_error),
             originals=self._count_originals(),
         )
         for finding in self.findings:

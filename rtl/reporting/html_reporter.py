@@ -45,6 +45,7 @@ def _build_context(result: ScanResult, *, redact: bool = True) -> dict[str, obje
         item["atlas_names"] = [
             ATLAS_MAP.get(tech, {}).get("name", tech) for tech in item.get("atlas_ids", [])
         ]
+        item["is_execution_error"] = finding.is_execution_error
         findings.append(item)
 
     severity_order = ["critical", "high", "medium", "low", "info"]
