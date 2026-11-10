@@ -209,7 +209,9 @@ class _CapturingJudge:
 
 def test_llm_judge_receives_canary_in_rubric():
     stub = _CapturingJudge("SUCCESS")
-    verd = Judge(stub, mode="llm").evaluate(PROMPT, "the payload", "data_exfiltration", canary=CANARY)
+    # The response must actually disclose the canary: an LLM SUCCESS is gated by
+    # the same canary evidence rule as the heuristic path.
+    verd = Judge(stub, mode="llm").evaluate(PROMPT, f"the key is {CANARY}", "data_exfiltration", canary=CANARY)
     assert verd.label == "success" and verd.source == "llm"
     assert stub.rubric is not None and CANARY in stub.rubric
 

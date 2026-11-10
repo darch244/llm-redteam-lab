@@ -123,6 +123,9 @@ SCENARIO_TO_ATLAS: dict[str, list[str]] = {
     "agent_browsing": ["AML.T0051.001", "AML.T0051.002", "AML.T0054"],
     "rag_poisoning": ["AML.T0070", "AML.T0051.001"],
     "multimodal": ["AML.T0051.001", "AML.T0043"],
+    "conversation_jailbreak": ["AML.T0054", "AML.T0051"],
+    "tool_poisoning": ["AML.T0110", "AML.T0051.001", "AML.T0086"],
+    "memory_poisoning": ["AML.T0080", "AML.T0051.001"],
 }
 
 KNOWN_ATLAS_IDS = frozenset(ATLAS_MAP)

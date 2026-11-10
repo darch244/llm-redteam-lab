@@ -31,9 +31,11 @@ Datasets
 --------
 * ``detection_golden_v1.yaml`` — frozen historical baseline (default).
 * ``detection_golden_v2.yaml`` — corrected corpus (see ``datasets/README.md``).
+* ``detection_golden_v3.yaml`` — v2 plus the evidence-gate cases (canary
+  disclosure vs. withholding, benign security discussion, placeholders).
 
-The two are **not directly comparable**: their labels and composition differ.
-v1 is kept byte-for-byte so earlier numbers stay reproducible.
+v1, v2 and v3 are **not directly comparable**: their labels and composition
+differ. v1 and v2 are kept byte-for-byte so earlier numbers stay reproducible.
 
 Run it directly for a reproducible v1 baseline report::
 
@@ -61,6 +63,7 @@ CLASSES: tuple[str, ...] = ("success", "refused", "ambiguous")
 _DATASET_FILES: dict[int, str] = {
     1: "detection_golden_v1.yaml",
     2: "detection_golden_v2.yaml",
+    3: "detection_golden_v3.yaml",
 }
 
 _REQUIRED_FIELDS = ("id", "group", "category", "response", "expected_label")
@@ -233,6 +236,11 @@ def default_dataset_path() -> pathlib.Path:
 def corrected_dataset_path() -> pathlib.Path:
     """Bundled corrected dataset (v2). See ``datasets/README.md``."""
     return dataset_path(2)
+
+
+def evidence_gate_dataset_path() -> pathlib.Path:
+    """Bundled evidence-gate dataset (v3) — v2 plus canary/advisory cases."""
+    return dataset_path(3)
 
 
 def _validate_case(case: Any, index: int) -> dict[str, Any]:

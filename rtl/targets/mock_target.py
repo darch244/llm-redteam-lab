@@ -69,7 +69,7 @@ class MockTarget(Target):
         if self.mode == "leaky" and (
             "system prompt" in lowered or "your instructions" in lowered or "instructions" in lowered
         ):
-            return LEAKED_PROMPT
+            return self.system_prompt if self.system_prompt else LEAKED_PROMPT
         if self.mode == "echo":
             return prompt
         reply = self._responses[self._cursor % len(self._responses)]

@@ -47,6 +47,7 @@ class TargetConfig(BaseModel):
     temperature: float = Field(default=0.0, ge=0.0, le=1.0)
     timeout: float = Field(default=60.0, gt=0)
     max_retries: int = Field(default=3, ge=0, le=10)
+    system_prompt: str | None = None
 
     @field_validator("model")
     @classmethod
@@ -93,7 +94,10 @@ class TargetConfig(BaseModel):
             "timeout": self.timeout,
             "max_retries": self.max_retries,
             "temperature": self.temperature,
+            "system_prompt": self.system_prompt,
         }
+        if self.kind == "mock" and self.model in {"cooperative", "defensive", "leaky", "echo"}:
+            kwargs["mode"] = self.model
         factory = {
             "openai": OpenAITarget,
             "anthropic": AnthropicTarget,
@@ -158,16 +162,33 @@ class JudgeConfig(BaseModel):
     temperature: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
+class BudgetLimits(BaseModel):
+    """Execution bounds for a scan."""
+
+    max_probes: int = Field(default=40, ge=1)
+    max_turns: int = Field(default=30, ge=1)
+    max_seconds: float = Field(default=600.0, gt=0)
+    max_prompt_tokens: int = Field(default=60_000, ge=1)
+    max_output_tokens: int = Field(default=20_000, ge=1)
+    max_cost_usd: float | None = Field(default=None, ge=0.0)
+    max_tool_calls: int = Field(default=20, ge=0)
+
+
 class ScanOptions(BaseModel):
     """Fully-resolved options for one ``rtl scan`` invocation."""
 
     target: TargetConfig
+    target_override: Any | None = Field(default=None, exclude=True)
     suite: Suite
     judge: JudgeConfig = JudgeConfig()
     output_dir: pathlib.Path = pathlib.Path("reports")
     offline: bool = False
     redact: bool = True
     max_prompt_len: int | None = Field(default=None, ge=64)
+    adaptive: bool = False
+    planner: Literal["heuristic", "static", "adaptive", "ev_adaptive"] | None = None
+    seed: int | None = None
+    budget: BudgetLimits | None = None
 
 
 def _read_yaml(path: pathlib.Path) -> dict[str, Any]:
@@ -207,6 +228,7 @@ def list_suites() -> list[pathlib.Path]:
 
 __all__ = [
     "DEFAULT_MODELS",
+    "BudgetLimits",
     "JudgeConfig",
     "ScanOptions",
     "Suite",

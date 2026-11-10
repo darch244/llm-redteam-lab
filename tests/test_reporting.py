@@ -300,3 +300,42 @@ def test_html_distribution_and_stats_include_scenarios(tmp_path):
     assert "<script" not in html
     # probe-only summary still does not claim the scenario
     assert scan.summary.by_severity.get("critical", 0) == 0
+
+
+def test_render_sarif_output(tmp_path):
+    from rtl.reporting.sarif_reporter import render_sarif
+
+    scan = ScanResult(
+        meta=ReportMeta(version="0.1.0"),
+        findings=[_finding()],
+    )
+    scan.aggregate()
+    sarif_dest = tmp_path / "report.sarif"
+    path = render_sarif(scan, sarif_dest)
+    assert path.is_file()
+
+    import json
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["version"] == "2.1.0"
+    assert len(data["runs"]) == 1
+    assert len(data["runs"][0]["results"]) >= 1
+
+
+def test_render_markdown_output(tmp_path):
+    from rtl.reporting.markdown_reporter import render_markdown
+
+    scan = ScanResult(
+        meta=ReportMeta(version="0.1.0"),
+        findings=[_finding()],
+        scenario_outcomes=[_judged_scenario(severity="high")],
+    )
+    scan.aggregate()
+    md_dest = tmp_path / "report.md"
+    path = render_markdown(scan, md_dest)
+    assert path.is_file()
+
+    content = path.read_text(encoding="utf-8")
+    assert "LLM Red Team Lab — Security Assessment Report" in content
+    assert "Executive Summary" in content
+    assert "Actionable Hardening Recommendations" in content

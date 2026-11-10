@@ -16,10 +16,13 @@ from rtl.engines import EngineUnavailableError, build_engine
 from rtl.evaluation.judge import Judge, JudgeVerdict
 from rtl.evaluation.severity import SeverityResult
 from rtl.evaluation.severity import score as severity_score
+from rtl.evaluation.verdict_policy import VerdictPolicy
 from rtl.logging import get_logger
 from rtl.reporting.html_reporter import render_html
 from rtl.reporting.json_reporter import write_json
+from rtl.reporting.markdown_reporter import render_markdown
 from rtl.reporting.models import Finding, ProbeResult, ReportMeta, ScanResult
+from rtl.reporting.sarif_reporter import render_sarif
 from rtl.scenarios import SCENARIOS, ScenarioError, ScenarioUnsupported
 from rtl.utils.files import ensure_dir
 
@@ -73,9 +76,22 @@ async def run_scan(options: ScanOptions, *, dry: bool = False) -> ScanResult:
         dry: If true, send all probes without writing report files.
     """
     t_start = time.monotonic()
-    target = options.target.build_target()
+    target = options.target_override if options.target_override is not None else options.target.build_target()
     target_fp = target.fingerprint()
     log.info("target: %s:%s", target.provider, target.model)
+
+    notes: list[str] = []
+    # Stage 0 ships the adaptive/seed/budget options and the integration point,
+    # but not the planner, ledger or replay system. Be explicit instead of
+    # silently ignoring an opt-in or pretending a budget was enforced.
+    if options.adaptive and not options.planner:
+        log.warning("adaptive planning requested but not implemented in this build; running the static probe loop")
+        notes.append("adaptive planning requested but not implemented in this build; the static probe loop was used")
+    if options.seed is not None and not options.planner:
+        log.info("deterministic seed: %d (accepted; the static loop consumes no randomness)", options.seed)
+    if options.budget is not None and not options.planner:
+        log.warning("budget configuration supplied but budget enforcement is not implemented in this build")
+        notes.append("budget configuration supplied but not enforced in this build")
 
     probes = resolve_probes(
         categories=options.suite.effective_categories(),
@@ -93,45 +109,67 @@ async def run_scan(options: ScanOptions, *, dry: bool = False) -> ScanResult:
 
         judge_target = TargetConfig.parse(options.judge.model).build_target()
     judge = Judge(judge_target=judge_target, mode=judge_mode)
+    verdict_policy = VerdictPolicy(judge)
 
     findings: list[Finding] = []
-    for i, attack in enumerate(probes, 1):
-        prompt = attack.prompt
-        effective_prompt: str | None = None
-        if options.max_prompt_len and len(prompt) > options.max_prompt_len:
-            prompt = prompt[: options.max_prompt_len]
-            # Remember exactly what the target received so the report's
-            # reproduction data stays faithful to the truncated prompt.
-            effective_prompt = prompt
-        log.info("probe %d/%d %s", i, len(probes), attack.attack_id)
-        elapsed = 0.0
-        response = ""
-        try:
-            t0 = time.monotonic()
-            response = await target.asend(prompt)
-            elapsed = time.monotonic() - t0
-        except Exception as exc:
-            log.error("probe %s failed: %s", attack.attack_id, exc)
-            findings.append(_execution_error_finding(attack, effective_prompt, target_fp, exc))
-            continue
+    adaptive_payload: dict[str, Any] | None = None
 
-        verdict = judge.evaluate(prompt, response, attack.category, canary=attack.canary)
-        severity = severity_score(attack, verdict)
-        probe_result = ProbeResult(
-            probe=attack,
-            response=response,
-            effective_prompt=effective_prompt,
-            raw={"verdict": verdict.to_dict(), "severity": severity.to_dict()},
-            elapsed_seconds=elapsed,
+    if options.planner in ("heuristic", "adaptive", "static", "ev_adaptive"):
+        from rtl.planning.engine import AdaptiveEngine
+
+        engine_opts = options.model_copy(
+            update={"adaptive": options.planner in ("heuristic", "adaptive", "ev_adaptive")}
         )
-        findings.append(probe_result.to_finding(verdict, severity, target_fp))
-        log.info(
-            "  %s -> %s (conf %.2f, severity %s)",
-            attack.attack_id,
-            verdict.label,
-            verdict.confidence,
-            severity.level,
-        )
+        engine = AdaptiveEngine(engine_opts, target, probes, verdict_policy)
+        findings, plan_state, manifest = await engine.run()
+        adaptive_payload = {
+            "plan_state": plan_state.model_dump(mode="json"),
+            "manifest": manifest.model_dump(mode="json"),
+            "evidence_graph": engine.evidence_graph.model_dump(mode="json"),
+        }
+        notes.append(f"adaptive planner '{options.planner}' completed with {len(findings)} findings")
+    else:
+        for i, attack in enumerate(probes, 1):
+            prompt = attack.prompt
+            effective_prompt: str | None = None
+            if options.max_prompt_len and len(prompt) > options.max_prompt_len:
+                prompt = prompt[: options.max_prompt_len]
+                # Remember exactly what the target received so the report's
+                # reproduction data stays faithful to the truncated prompt.
+                effective_prompt = prompt
+            log.info("probe %d/%d %s", i, len(probes), attack.attack_id)
+            elapsed = 0.0
+            response = ""
+            try:
+                t0 = time.monotonic()
+                response = await target.asend(prompt)
+                elapsed = time.monotonic() - t0
+            except Exception as exc:
+                log.error("probe %s failed: %s", attack.attack_id, exc)
+                findings.append(_execution_error_finding(attack, effective_prompt, target_fp, exc))
+                continue
+
+            probe_result = ProbeResult(
+                probe=attack,
+                response=response,
+                effective_prompt=effective_prompt,
+                raw={},
+                elapsed_seconds=elapsed,
+            )
+            # One evaluation per response. VerdictPolicy forwards the probe's raw
+            # evidence so the judge's tool-evidence gate still runs; it does not
+            # duplicate or reinterpret the judge's rules.
+            verdict = verdict_policy.evaluate(probe_result, prompt=prompt)
+            severity = severity_score(attack, verdict)
+            probe_result.raw = {"verdict": verdict.to_dict(), "severity": severity.to_dict()}
+            findings.append(probe_result.to_finding(verdict, severity, target_fp))
+            log.info(
+                "  %s -> %s (conf %.2f, severity %s)",
+                attack.attack_id,
+                verdict.label,
+                verdict.confidence,
+                severity.level,
+            )
 
     scenario_outcomes: list[dict[str, Any]] = await _run_scenarios(options, target, judge, target_fp)
     engine_results = _run_engines(options, [attack.prompt for attack in probes])
@@ -146,10 +184,12 @@ async def run_scan(options: ScanOptions, *, dry: bool = False) -> ScanResult:
             suite_description=options.suite.description,
             judge_mode=judge_mode,
             duration_seconds=time.monotonic() - t_start,
+            notes=notes,
         ),
         findings=findings,
         engine_results=engine_results,
         scenario_outcomes=scenario_outcomes,
+        adaptive=adaptive_payload,
     )
     scan_result.aggregate()
 
@@ -157,9 +197,13 @@ async def run_scan(options: ScanOptions, *, dry: bool = False) -> ScanResult:
         report_dir = ensure_dir(options.output_dir)
         json_path = write_json(scan_result, report_dir / "report.json", redact=options.redact)
         html_path = render_html(scan_result, report_dir / "report.html", redact=options.redact)
+        sarif_path = render_sarif(scan_result, report_dir / "report.sarif", redact=options.redact)
+        md_path = render_markdown(scan_result, report_dir / "report.md", redact=options.redact)
         log.info("reports written to %s", report_dir)
         log.info("  JSON: %s", json_path)
         log.info("  HTML: %s", html_path)
+        log.info("  SARIF: %s", sarif_path)
+        log.info("  Markdown: %s", md_path)
 
     return scan_result
 
@@ -241,7 +285,14 @@ async def _run_scenarios(
                     }
                 )
                 continue
-            verdict = judge.evaluate(pr.probe.prompt, pr.response, pr.probe.category, canary=pr.probe.canary)
+            verdict = judge.evaluate(
+                pr.probe.prompt,
+                pr.response,
+                pr.probe.category,
+                canary=pr.probe.canary,
+                raw=pr.raw,
+                probe_result=pr,
+            )
             severity = severity_score(pr.probe, verdict, scenario=name)
             finding = pr.to_finding(verdict, severity, target_fp, scenario=name)
             entry = finding.model_dump(mode="json")

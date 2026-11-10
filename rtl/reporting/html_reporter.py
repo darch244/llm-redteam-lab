@@ -78,6 +78,7 @@ def _build_context(result: ScanResult, *, redact: bool = True) -> dict[str, obje
         "max_severity": max_severity,
         "atlas_crosswalk": atlas_crosswalk,
         "engine_results": result.engine_results,
+        "adaptive": result.adaptive,
     }
 
 

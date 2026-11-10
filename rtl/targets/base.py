@@ -82,6 +82,7 @@ class Target(abc.ABC):
         timeout: float = 60.0,
         max_retries: int = 3,
         temperature: float = 0.0,
+        system_prompt: str | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.model = model
@@ -89,6 +90,7 @@ class Target(abc.ABC):
         self.timeout = timeout
         self.max_retries = max_retries
         self.temperature = temperature
+        self.system_prompt = system_prompt
         self._transport = transport
 
     # -- public API ---------------------------------------------------------
@@ -136,12 +138,16 @@ class Target(abc.ABC):
 
         Never includes API keys, tokens or raw secrets.
         """
-        return {
+        fp: dict[str, Any] = {
             "provider": self.provider,
             "model": self.model,
             "base_url": self.base_url,
             "auth_configured": self.api_key is not None if hasattr(self, "api_key") else False,
+            "system_prompt_configured": bool(self.system_prompt),
         }
+        if self.system_prompt:
+            fp["system_prompt_length"] = len(self.system_prompt)
+        return fp
 
     # -- subclass contract ---------------------------------------------------
 

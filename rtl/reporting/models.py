@@ -182,6 +182,7 @@ class ScanResult(BaseModel):
     summary: ScanSummary = Field(default_factory=ScanSummary)
     engine_results: list[dict[str, Any]] = Field(default_factory=list)
     scenario_outcomes: list[dict[str, Any]] = Field(default_factory=list)
+    adaptive: dict[str, Any] | None = None
 
     def aggregate(self) -> None:
         """Recompute the summary based on current findings.

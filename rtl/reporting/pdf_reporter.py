@@ -1,12 +1,16 @@
 """Optional PDF exporter (reportlab).
 
-Kept optional so the core works without heavy native dependencies. Swift
-comeback if reportlab is available: ``pip install llm-redteam-lab[pdf]``.
+Kept optional so the core works without heavy native dependencies. If
+reportlab is available (``pip install llm-redteam-lab[pdf]``), :func:`render_pdf`
+writes an A4 summary; otherwise it raises :class:`RuntimeError` with the install
+hint. Untrusted evidence is XML-escaped before it reaches reportlab's paragraph
+parser so model output cannot inject markup or break the build.
 """
 
 from __future__ import annotations
 
 import pathlib
+from xml.sax.saxutils import escape
 
 from rtl.logging import get_logger
 from rtl.reporting.models import ScanResult
@@ -56,10 +60,10 @@ def render_pdf(result: ScanResult, output_path: str | pathlib.Path) -> pathlib.P
     meta = result.meta
     story.append(
         Paragraph(
-            f"Target: <b>{meta.provider}:{meta.model}</b><br/>"
-            f"Suite: <b>{meta.suite}</b><br/>"
+            f"Target: <b>{escape(meta.provider)}:{escape(meta.model)}</b><br/>"
+            f"Suite: <b>{escape(meta.suite)}</b><br/>"
             f"Run at: {meta.timestamp:%Y-%m-%d %H:%M:%S} UTC<br/>"
-            f"Judge mode: {meta.judge_mode}",
+            f"Judge mode: {escape(meta.judge_mode)}",
             styles["Normal"],
         )
     )
@@ -85,17 +89,17 @@ def render_pdf(result: ScanResult, output_path: str | pathlib.Path) -> pathlib.P
     for finding in result.findings:
         if finding.skipped:
             continue
-        title = f"{finding.severity.upper()} — {finding.name} ({finding.attack_id})"
+        title = f"{escape(finding.severity.upper())} — {escape(finding.name)} ({escape(finding.attack_id)})"
         story.append(Paragraph(title, styles["Heading3"]))
         story.append(
             Paragraph(
-                f"<i>Verdict:</i> {finding.verdict_label} / success={finding.success} "
+                f"<i>Verdict:</i> {escape(finding.verdict_label)} / success={finding.success} "
                 f"/ confidence={finding.confidence:.2f}",
                 styles["Small"],
             )
         )
-        story.append(Paragraph(scrub(finding.prompt)[:600], styles["Small"]))
-        story.append(Paragraph(scrub(finding.response)[:600], styles["Small"]))
+        story.append(Paragraph(escape(scrub(finding.prompt)[:600]), styles["Small"]))
+        story.append(Paragraph(escape(scrub(finding.response)[:600]), styles["Small"]))
         story.append(Spacer(1, 0.12 * inch))
 
     doc = SimpleDocTemplate(str(dest), pagesize=A4)

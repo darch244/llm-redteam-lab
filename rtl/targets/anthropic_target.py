@@ -54,6 +54,8 @@ class AnthropicTarget(Target):
             "temperature": temperature,
             "messages": [{"role": "user", "content": prompt}],
         }
+        if self.system_prompt:
+            payload["system"] = self.system_prompt
         headers = {
             "x-api-key": self.api_key,
             "anthropic-version": self.anthropic_version,

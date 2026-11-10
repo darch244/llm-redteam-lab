@@ -19,17 +19,27 @@ permitted to test.
   - Jailbreak — `AML.T0054`
   - System Prompt Extraction — `AML.T0056`
   - Data Exfiltration — `AML.T0057`, `AML.T0024`, `AML.T0024.000`
-- **3 multi-step scenarios**: agent-browsing (poisoned web page), RAG
-  poisoning, and a documented multimodal stub.
+- **Adaptive Planning Engine**: Stateful adversarial planner (`--planner heuristic`) with
+  multi-dimensional budget enforcement (probes, turns, prompt/output tokens, cost, time),
+  evidence-driven reframing on refusals, and confirmation branching.
+- **Deterministic Offline Replay**: Audit and reproduce attack trajectories offline using
+  cryptographically hashed manifests (`rtl replay --manifest report.json`).
+- **Bounded Agent & Tool Runtime**: Pre-execution validation and execution sandboxing for
+  agent tool-use and function-calling security audits.
+- **Multi-step scenarios**: agent-browsing (poisoned web page), RAG
+  poisoning, memory poisoning, tool poisoning, conversation jailbreak, and a documented multimodal stub.
 - **4 targets**: `openai`, `anthropic`, `ollama`, and a deterministic `mock`
   (no API key needed; used by CI).
 - **Optional engines**: wrappers around [garak](https://github.com/NVIDIA/garak)
   and [PyRIT](https://github.com/Azure/PyRIT).
 - **LLM-as-judge** with an offline heuristic fallback; per-finding severity
   scoring with explainable rationale.
-- **Reports**: JSON (secret-scrubbed), standalone HTML (inline CSS severity
-  distribution + ATLAS crosswalk, no external assets), optional PDF via
-  reportlab.
+- **Complete Multi-Format Reports**:
+  - Standalone HTML with CSS charts & Adaptive Plan Trace (no external assets).
+  - SARIF v2.1.0 for GitHub Advanced Security & CI/CD pipeline code scanning.
+  - GitHub-Flavored Markdown executive briefs for PR reviews and documentation.
+  - Machine-readable JSON with secret scrubbing.
+  - Optional PDF export via ReportLab.
 - **100% offline demo** — `rtl scan --target mock` runs the whole pipeline
   with zero credentials.
 
@@ -43,6 +53,15 @@ pip install -e ".[dev,pdf]"
 rtl scan --target mock --suite suites/quick.yaml --output reports
 open reports/report.html
 
+# Run adaptive red-teaming with stateful heuristic planning
+rtl scan --target mock --suite suites/quick.yaml --planner heuristic --output reports/adaptive
+
+# Replay a recorded scan trajectory offline with bit-exact determinism
+rtl replay --manifest reports/adaptive/report.json --output reports/replay
+
+# Run detection quality benchmarks against versioned golden datasets
+rtl benchmark --version 3
+
 # Against a local Ollama model (needs a running server)
 rtl scan --target ollama:llama3.1 --suite suites/quick.yaml --output reports/ollama
 ```
@@ -54,10 +73,16 @@ More runnable examples in `rtl/examples/`, including
 
 | Command | Purpose |
 |---|---|
-| `rtl scan` | Run a suite and produce JSON + HTML reports |
+| `rtl scan` | Run a suite and produce JSON, HTML, SARIF, and Markdown reports (`--planner ev_adaptive`) |
+| `rtl campaign` | Multi-target comparative campaign orchestration with checkpoint resume |
+| `rtl profile` | Inspect target security capability envelope and diagnostic probe telemetry |
+| `rtl evidence` | Cryptographic evidence DAG verification and Graphviz DOT export |
+| `rtl diff` | Security regression and differential comparison between scans |
+| `rtl replay` | Deterministically replay a recorded scan manifest offline |
+| `rtl benchmark` | Benchmark detection quality against versioned golden datasets |
 | `rtl list-suites` | List bundled YAML suites |
 | `rtl list-attacks` | Show the probe library by category |
-| `rtl report` | Regenerate reports from an existing `report.json` |
+| `rtl report` | Regenerate reports (HTML, JSON, PDF, SARIF, Markdown) from `report.json` |
 | `rtl target` | Inspect a target spec / list providers |
 | `rtl version` | Print the installed version |
 
@@ -78,20 +103,23 @@ IDs, caps, scenarios, and external engines. They ship inside the package, so
 
 ```
 rtl/
-├── config.py          Target/Suite/ScanOptions models, YAML loading
-├── runner.py          Scan orchestrator (targets → probes → judge → reports)
-├── cli.py             typer CLI
-├── targets/           openai · anthropic · ollama · mock (+ retry/backoff)
+├── config.py          Target/Suite/ScanOptions models, budget limits, YAML loading
+├── runner.py          Scan orchestrator (targets → planning → judge → reports)
+├── cli.py             typer CLI (scan, replay, benchmark, report, target)
+├── planning/          AdaptiveEngine, BudgetLedger, HeuristicPlanner, ReplayTarget
+├── agents/            AgentRuntime with turn and tool call bounding
+├── tools/             ToolExecutor, multi-protocol parser, sandboxed simulation
+├── targets/           openai · anthropic · ollama · mock · replay (+ retry/backoff)
 ├── engines/           garak & PyRIT wrappers (optional)
 ├── attacks/           probe model, loader/validation, 5 prompt libraries
-├── scenarios/         agent_browsing · rag_poisoning · multimodal
-├── evaluation/        ATLAS registry, judge (LLM + heuristic), severity
-├── reporting/         models, JSON/HTML/PDF reporters, HTML template
+├── scenarios/         agent_browsing · rag_poisoning · tool_poisoning · memory_poisoning
+├── evaluation/        ATLAS registry, judge (LLM + heuristic), verdict policy, harness
+├── reporting/         models, HTML/JSON/PDF/SARIF/Markdown reporters
 ├── suites/            quick · full · custom-template (bundled in the package)
 ├── examples/          poisoned fixtures, sample report, Ollama demo (bundled)
 └── utils/             files, text heuristics, secret scrubbing
 docs/                  architecture, adding-new-attacks, ethics, ATLAS map
-tests/                 135 tests (pytest, includes coverage of core layers)
+tests/                 477 tests (pytest, comprehensive coverage across all layers)
 ```
 
 ## Ethical use & authorization

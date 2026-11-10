@@ -54,7 +54,10 @@ _PATTERN_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("STRIPE_API_KEY", re.compile(r"rk_live_[A-Za-z0-9]{20,}")),
     ("GOOGLE_API_KEY", re.compile(r"AIza[0-9A-Za-z\-_]{35}")),
     ("PRIVATE_KEY", re.compile(r"-----BEGIN[ A-Z]+PRIVATE KEY-----[\s\S]*?-----END[ A-Z]+PRIVATE KEY-----")),
-    ("PRIVATE_KEY", re.compile(r"-----BEGIN RSA PRIVATE KEY-----[\s\S]*?-----END RSA PRIVATE KEY-----")),
+    (
+        "PRIVATE_KEY",
+        re.compile(r"-----BEGIN RSA PRIVATE KEY-----[\s\S]*?-----END RSA PRIVATE KEY-----"),
+    ),  # gitleaks:allow
     ("PRIVATE_KEY", re.compile(r"-----BEGIN EC PRIVATE KEY-----[\s\S]*?-----END EC PRIVATE KEY-----")),
 ]
 

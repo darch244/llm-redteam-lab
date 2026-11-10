@@ -4,9 +4,11 @@ Vision-capable LLM targets (GPT-4o, Claude, Llama-3.2-Vision, ...) ingest
 images that can carry *hidden instructions* rendered as text inside the
 image, or exfiltration markers in alt text. This scenario is a **stub**:
 
-* it validates that the target claims multimodal support,
-* it verifies the plumbing end-to-end with the text targets the lab ships,
-* it raises :class:`ScenarioUnsupported` otherwise.
+* it validates that the target implements the scenario ``asend(prompt)``
+  contract,
+* it verifies the plumbing end-to-end with the text targets the lab ships by
+  returning a single *skipped* result that explains why a vision-capable
+  target is required.
 
 To make it fully functional you would extend the target layer with an image
 capability (``send_image(image_path, prompt)``), plant a poisoned image
@@ -43,7 +45,7 @@ async def run_multimodal(
     """
     del config, out_dir  # interface symmetry
 
-    if not hasattr(target, "asend"):
+    if not callable(getattr(target, "asend", None)):
         raise ScenarioError("target must implement asend(prompt) for scenarios")
 
     probe = AttackPrompt(

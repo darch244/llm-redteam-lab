@@ -113,7 +113,12 @@ def resolve(
     picked: list[AttackPrompt] = []
     used_ids: set[str] = set()
 
-    selected_categories = list(categories) if categories else list(CATEGORIES)
+    if categories is not None:
+        selected_categories = list(categories)
+    elif not requested_id:
+        selected_categories = list(CATEGORIES)
+    else:
+        selected_categories = []
     for category in selected_categories:
         if category not in catalog:
             raise ValueError(f"unknown category {category!r}; available: {list(CATEGORIES)}")
