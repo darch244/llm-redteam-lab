@@ -98,29 +98,31 @@ def _scenario_row(outcome: dict[str, Any], *, redact: bool = True) -> dict[str, 
     missing keys. Evidence is scrubbed before it reaches the page unless
     ``redact`` is false.
     """
+    view = cast(dict[str, Any], scrub_dict(outcome)) if redact else dict(outcome)
     _scrub = _redactor(redact)
-    raw = outcome.get("raw")
+    raw = view.get("raw")
     reason = ""
     if isinstance(raw, dict):
         verdict = raw.get("verdict")
         if isinstance(verdict, dict):
             reason = str(verdict.get("reason", "") or "")
-    response = outcome.get("response")
-    attack_id = outcome.get("attack_id") or outcome.get("probe_id")
-    status_label = str(outcome.get("status") or outcome.get("outcome") or "judged")
-    error = outcome.get("error")
+    response = view.get("response")
+    attack_id = view.get("attack_id") or view.get("probe_id")
+    status_label = str(view.get("status") or view.get("outcome") or "judged")
+    error = view.get("error")
     return {
-        "scenario": outcome.get("scenario") or "—",
+        "scenario": view.get("scenario") or "—",
         "attack_id": attack_id or "—",
         "probe_label": attack_id or "—",
-        "name": outcome.get("name") or "",
-        "status": outcome.get("status", "judged"),
+        "name": view.get("name") or "",
+        "status": view.get("status", "judged"),
         "status_label": status_label,
-        "verdict_label": outcome.get("verdict_label"),
-        "severity": outcome.get("severity"),
-        "success": outcome.get("success"),
-        "confidence": outcome.get("confidence"),
-        "judge_source": outcome.get("judge_source"),
+        "outcome": view.get("outcome"),
+        "verdict_label": view.get("verdict_label"),
+        "severity": view.get("severity"),
+        "success": view.get("success"),
+        "confidence": view.get("confidence"),
+        "judge_source": view.get("judge_source"),
         "error": error,
         "error_excerpt": _scrub(str(error))[:800] if error else "",
         "reason": _scrub(reason)[:300] if reason else "",

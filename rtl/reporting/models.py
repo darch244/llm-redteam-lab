@@ -260,7 +260,7 @@ class ScanResult(BaseModel):
                 for f in self.findings
                 if f.outcome == "inconclusive" or f.outcome not in {"confirmed", "suspected", "failed"}
             ),
-            errors=sum(1 for f in self.findings if f.error or f.skipped),
+            errors=sum(1 for f in self.findings if f.error and not f.skipped),
             originals=self._count_originals(),
         )
         for finding in self.findings:
