@@ -177,13 +177,13 @@ async def test_probe_execution_error_is_recorded_not_dropped(tmp_path, monkeypat
     assert result.summary.total == len(result.findings) >= 1
     assert all(f.error for f in result.findings)
     assert all("simulated transport failure" in (f.error or "") for f in result.findings)
-    # execution errors are never classified as security outcomes
+    # execution errors are recorded as failures, never as successes
     assert result.summary.succeeded == 0
     assert result.summary.refused == 0
-    assert result.summary.ambiguous == 0
-    assert result.summary.blocked == 0
+    assert result.summary.failed == len(result.findings)
     assert result.summary.errors == len(result.findings)
     assert all(f.success is False for f in result.findings)
+    assert all(f.outcome == "failed" for f in result.findings)
 
 
 @pytest.mark.asyncio
