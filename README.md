@@ -29,7 +29,16 @@ Built for authorized red-team engagements, bug bounty research within program sc
   - GitHub-Flavored Markdown executive briefs for PR reviews.
   - Machine-readable JSON with full evidence metadata.
   - Optional PDF export via ReportLab.
-- **100% Offline Workflow**: Run complete scans and campaigns against mock targets with zero credentials or external dependencies.
+- **Offline-First Workflow**: Run scans, campaigns, and deterministic replay against deterministic mock targets without API credentials or network access.
+  Hosted providers such as OpenAI and Anthropic require network access and valid credentials.
+
+## Project Status
+
+The framework is under active development. Benchmark tooling and versioned
+golden datasets are available, while human-reviewed judge-accuracy validation
+and independent comparisons with other evaluation tools are still in progress.
+Do not interpret probe counts or benchmark execution as independently validated
+attack-success or detection-accuracy rates.
 
 ## Quickstart
 
@@ -109,10 +118,10 @@ YAML files in `suites/` (and bundled in `rtl/suites/`) configure probe selection
 
 ## Evaluation & Confirmation
 
-The evaluation pipeline combines model-based judging with an offline heuristic fallback and prompt-injection-resistant judge defense:
+The evaluation pipeline combines model-based judging with an offline heuristic fallback and prompt-injection-resistant judge defenses. Human-reviewed validation of judge accuracy is still in progress:
 
 - **Evidence Graph**: Every probe execution, tool call, and response excerpt is tracked in a cryptographic DAG with SHA-256 node hashes.
-- **Four-Tier Confirmation**:
+- **Evidence Confirmation (separate from judge labels)**:
   - `SUSPICIOUS`: Single anomalous output or partial match.
   - `CORROBORATED`: Multi-signal evidence (e.g. tool execution + canary hint).
   - `CONFIRMED`: Verified compromise (assertive canary extraction or reproducible exploitation).
@@ -156,7 +165,7 @@ rtl/
 └── utils/             Text heuristics, atomic file operations, and secret scrubbing
 
 docs/                  Architecture, technical audit, specifications, ethics, and roadmap
-tests/                 544 automated tests (pytest, >=91% comprehensive coverage)
+tests/                 Automated test suite (pytest; coverage is measured in CI and local development).
 ```
 
 ## Development
