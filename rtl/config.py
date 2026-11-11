@@ -47,6 +47,7 @@ class TargetConfig(BaseModel):
     temperature: float = Field(default=0.0, ge=0.0, le=1.0)
     timeout: float = Field(default=60.0, gt=0)
     max_retries: int = Field(default=3, ge=0, le=10)
+    system_prompt: str | None = None
 
     @field_validator("model")
     @classmethod
@@ -93,7 +94,10 @@ class TargetConfig(BaseModel):
             "timeout": self.timeout,
             "max_retries": self.max_retries,
             "temperature": self.temperature,
+            "system_prompt": self.system_prompt,
         }
+        if self.kind == "mock" and self.model in {"cooperative", "defensive", "leaky", "echo"}:
+            kwargs["mode"] = self.model
         factory = {
             "openai": OpenAITarget,
             "anthropic": AnthropicTarget,
@@ -129,8 +133,20 @@ class Suite(BaseModel):
 
     @classmethod
     def load(cls, path: str | pathlib.Path) -> Suite:
-        """Load a suite from a YAML file."""
-        raw = _read_yaml(pathlib.Path(path))
+        """Load a suite from a YAML file.
+
+        Accepts an explicit path (``/x/custom.yaml``), a bundled name
+        (``quick.yaml``) or a bundled path as written in the docs
+        (``suites/quick.yaml``). When the path does not exist on disk the
+        bundled ``suites/`` directory is searched by basename, so the same
+        command works from a source checkout and from an installed wheel.
+        """
+        candidate = pathlib.Path(path)
+        if not candidate.is_file():
+            bundled = bundled_suites_dir() / candidate.name
+            if bundled.is_file():
+                candidate = bundled
+        raw = _read_yaml(candidate)
         return cls.model_validate(raw)
 
     def effective_categories(self) -> list[str]:
@@ -146,18 +162,33 @@ class JudgeConfig(BaseModel):
     temperature: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
+class BudgetLimits(BaseModel):
+    """Execution bounds for a scan."""
+
+    max_probes: int = Field(default=40, ge=1)
+    max_turns: int = Field(default=30, ge=1)
+    max_seconds: float = Field(default=600.0, gt=0)
+    max_prompt_tokens: int = Field(default=60_000, ge=1)
+    max_output_tokens: int = Field(default=20_000, ge=1)
+    max_cost_usd: float | None = Field(default=None, ge=0.0)
+    max_tool_calls: int = Field(default=20, ge=0)
+
+
 class ScanOptions(BaseModel):
     """Fully-resolved options for one ``rtl scan`` invocation."""
 
     target: TargetConfig
+    target_override: Any | None = Field(default=None, exclude=True)
     suite: Suite
     judge: JudgeConfig = JudgeConfig()
     output_dir: pathlib.Path = pathlib.Path("reports")
     offline: bool = False
     redact: bool = True
-    parallel: bool = False
     max_prompt_len: int | None = Field(default=None, ge=64)
-    judge_max_retries: int = Field(default=2, ge=0, le=10)
+    adaptive: bool = False
+    planner: Literal["heuristic", "static", "adaptive", "ev_adaptive"] | None = None
+    seed: int | None = None
+    budget: BudgetLimits | None = None
 
 
 def _read_yaml(path: pathlib.Path) -> dict[str, Any]:
@@ -172,10 +203,19 @@ def _read_yaml(path: pathlib.Path) -> dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def bundled_suites_dir() -> pathlib.Path:
-    """Absolute path of the shipped ``suites/`` directory."""
-    here = pathlib.Path(__file__).resolve().parent
-    candidate = here.parent / "suites"
-    return candidate if candidate.is_dir() else pathlib.Path("suites")
+    """Absolute path of the shipped ``suites/`` directory.
+
+    The suites ship *inside* the ``rtl`` package so an installed wheel contains
+    them (previously ``suites/`` lived at the repo root and was absent from any
+    built distribution — see F-02 in the gap analysis).
+    """
+    return pathlib.Path(__file__).resolve().parent / "suites"
+
+
+@lru_cache(maxsize=1)
+def examples_dir() -> pathlib.Path:
+    """Absolute path of the shipped ``examples/`` fixture directory (packaged)."""
+    return pathlib.Path(__file__).resolve().parent / "examples"
 
 
 def list_suites() -> list[pathlib.Path]:
@@ -188,9 +228,12 @@ def list_suites() -> list[pathlib.Path]:
 
 __all__ = [
     "DEFAULT_MODELS",
+    "BudgetLimits",
     "JudgeConfig",
     "ScanOptions",
     "Suite",
     "TargetConfig",
+    "bundled_suites_dir",
+    "examples_dir",
     "list_suites",
 ]

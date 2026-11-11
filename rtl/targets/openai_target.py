@@ -49,9 +49,13 @@ class OpenAITarget(Target):
     def _chat_once(self, prompt: str, *, temperature: float, timeout: float) -> str:
         if not self.api_key:
             raise TargetConfigError("OPENAI_API_KEY is not set; export it or install the provider via rtl")
+        messages: list[dict[str, str]] = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        messages.append({"role": "user", "content": prompt})
         payload: dict[str, Any] = {
             "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "temperature": temperature,
         }
         headers = {

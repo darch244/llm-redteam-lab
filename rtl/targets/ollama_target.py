@@ -37,7 +37,7 @@ class OllamaTarget(Target):
     ) -> None:
         super().__init__(model, base_url=base_url, **kwargs)
         self.api_key: str | None = env_key("OLLAMA_API_KEY")
-        self.system = system
+        self.system = system or self.system_prompt
 
     @property
     def effective_base_url(self) -> str:

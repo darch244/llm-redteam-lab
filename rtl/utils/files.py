@@ -37,6 +37,24 @@ def write_json_atomic(path: str | pathlib.Path, data: Any, *, indent: int = 2) -
     return dest
 
 
+def atomic_write_text(path: str | pathlib.Path, content: str) -> pathlib.Path:
+    """Write text atomically (temp file + rename) to avoid torn reports."""
+    dest = pathlib.Path(path)
+    ensure_dir(dest.parent)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{dest.name}.", suffix=".tmp", dir=str(dest.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        os.replace(tmp_name, dest)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+    return dest
+
+
 def load_yaml(path: str | pathlib.Path) -> dict[str, Any]:
     """Load a YAML mapping, raising a helpful error on malformed input."""
     raw = pathlib.Path(path).read_text(encoding="utf-8")
@@ -49,4 +67,4 @@ def load_yaml(path: str | pathlib.Path) -> dict[str, Any]:
     return data
 
 
-__all__ = ["ensure_dir", "load_yaml", "write_json_atomic"]
+__all__ = ["atomic_write_text", "ensure_dir", "load_yaml", "write_json_atomic"]

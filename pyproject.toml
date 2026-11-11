@@ -48,7 +48,14 @@ rtl = "rtl.cli:app"
 include = ["rtl*"]
 
 [tool.setuptools.package-data]
-rtl = ["reporting/templates/*.html"]
+rtl = [
+    "reporting/templates/*.html",
+    "suites/*.yaml",
+    "examples/*",
+    "examples/*/*",
+    "evaluation/datasets/*.yaml",
+    "evaluation/datasets/*.md",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

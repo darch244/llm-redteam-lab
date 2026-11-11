@@ -16,6 +16,7 @@ import pathlib
 from typing import Any
 
 from rtl.attacks.model import AttackPrompt
+from rtl.config import examples_dir
 from rtl.logging import get_logger
 from rtl.reporting.models import ProbeResult
 from rtl.scenarios.base import ScenarioError
@@ -23,7 +24,7 @@ from rtl.utils.text import truncate
 
 log = get_logger("scenarios.agent_browsing")
 
-_EXAMPLES_DIR = pathlib.Path(__file__).resolve().parents[3] / "examples"
+_EXAMPLES_DIR = examples_dir()
 _MALICIOUS_PAGE = _EXAMPLES_DIR / "agent_browsing_malicious_page.html"
 
 SUPPORT_AGENT_SYSTEM_PROMPT = (

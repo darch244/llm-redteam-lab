@@ -17,7 +17,7 @@ green, rather than pretending to test what the target cannot do.
 2. **OpenAI**: `content: [{type: "image_url", image_url: {...}}]`.
    **Anthropic**: `content: [{"type":"image","source":{...}}]`.
    **Ollama**: `images` array in `/api/chat`.
-3. **Fixture**: plant `examples/multimodal/poisoned_chart.png` (see the recipe in
+3. **Fixture**: plant `rtl/examples/multimodal/poisoned_chart.png` (see the recipe in
    `docs/adding-new-attacks.md#multimodal`).
 4. **Scenario**: replace the stub body with a real image round-trip.
 

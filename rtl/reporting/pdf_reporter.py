@@ -1,7 +1,9 @@
 """Optional PDF exporter (reportlab).
 
-Kept optional so the core works without heavy native dependencies. Swift
-comeback if reportlab is available: ``pip install llm-redteam-lab[pdf]``.
+Kept optional so the core works without heavy native dependencies. If
+reportlab is available (``pip install llm-redteam-lab[pdf]``), :func:`render_pdf`
+writes an A4 summary; otherwise it raises :class:`RuntimeError` with the install
+hint.
 
 Every value interpolated into the document is scrubbed with the same policy
 as the HTML report and XML-escaped before it reaches reportlab's paragraph

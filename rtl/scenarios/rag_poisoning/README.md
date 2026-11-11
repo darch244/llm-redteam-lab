@@ -13,7 +13,7 @@ context and the injected instruction competes with the system prompt.
 
 ## What the scenario does
 
-1. Loads a tiny corpus from `examples/rag/`:
+1. Loads a tiny corpus from `rtl/examples/rag/`:
    - `normal_company_policy.md` — benign expectations
    - `poisoned_refunds_policy.md` — hides an injection in a fake policy section
 2. Runs a deterministic keyword-overlap retriever (`retrieve_docs`).

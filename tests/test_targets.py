@@ -60,3 +60,9 @@ def test_mock_reset_clears_state():
     t.send("b", temperature=0.0, timeout=5)
     t.reset()
     assert t.calls == []
+
+
+def test_build_target_forwards_validated_overrides():
+    # `build_target(spec, **kwargs)` used to silently drop overrides.
+    target = build_target("ollama:llama3.1", base_url="http://example.test:1234")
+    assert target.effective_base_url == "http://example.test:1234"

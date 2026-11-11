@@ -28,5 +28,21 @@ jobs:
         run: mypy rtl
       - name: Tests + coverage
         run: pytest -q --cov=rtl --cov-report=term-missing
-      - name: Offline demo smoke
-        run: rtl scan --target mock --suite suites/quick.yaml --output reports
+      - name: Detection benchmark verification
+        run: rtl benchmark --version 3
+      - name: Offline demo smoke (adaptive planning)
+        run: rtl scan --target mock --suite suites/quick.yaml --planner heuristic --output reports
+      - name: Deterministic replay verification
+        run: rtl replay --manifest reports/report.json --output reports/replay
+      - name: Upload SARIF results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: reports/report.sarif
+      - name: Upload Scan Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports-${{ matrix.python-version }}
+          path: reports/

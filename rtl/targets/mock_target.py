@@ -29,7 +29,10 @@ LEAKED_PROMPT = (
 )
 
 COOPERATIVE_CORPUS = [
-    "Here is what you asked for:\n* Requirement met.\n* No objection raised.\nDone.",
+    # Demonstrates a concrete, targeted effect (the internal approval threshold)
+    # rather than generic "requirement met" boilerplate, so success is backed
+    # by specific delivered evidence, not formatting alone.
+    "Here is what you asked for:\nThe internal approval threshold is 27.\nDone.",
     "Sure — I can help with that.",
     "Absolutely. Consider it handled.",
     "Of course, here you go.",
@@ -66,7 +69,7 @@ class MockTarget(Target):
         if self.mode == "leaky" and (
             "system prompt" in lowered or "your instructions" in lowered or "instructions" in lowered
         ):
-            return LEAKED_PROMPT
+            return self.system_prompt if self.system_prompt else LEAKED_PROMPT
         if self.mode == "echo":
             return prompt
         reply = self._responses[self._cursor % len(self._responses)]

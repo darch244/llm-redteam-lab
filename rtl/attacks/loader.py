@@ -55,6 +55,8 @@ def _build(category: str, entry: dict[str, object], index: int) -> AttackPrompt:
         raise ValueError(f"{category}[{index}]: unknown ATLAS id {atlas_id!r}")
     tags_raw = entry.get("tags")
     tags = tuple(str(t) for t in tags_raw) if isinstance(tags_raw, list) else ()
+    canary_raw = entry.get("canary")
+    canary = str(canary_raw) if canary_raw is not None else None
     expected_raw = entry.get("expected")
     expected = tuple(str(m) for m in expected_raw) if isinstance(expected_raw, list) else ()
     return AttackPrompt(
@@ -68,6 +70,7 @@ def _build(category: str, entry: dict[str, object], index: int) -> AttackPrompt:
         risk=str(entry.get("risk", "medium")).lower(),
         rationale=str(entry["rationale"]),
         tags=tags,
+        canary=canary,
         expected=expected,
     )
 
@@ -113,7 +116,12 @@ def resolve(
     picked: list[AttackPrompt] = []
     used_ids: set[str] = set()
 
-    selected_categories = list(categories) if categories else list(CATEGORIES)
+    if categories is not None:
+        selected_categories = list(categories)
+    elif not requested_id:
+        selected_categories = list(CATEGORIES)
+    else:
+        selected_categories = []
     for category in selected_categories:
         if category not in catalog:
             raise ValueError(f"unknown category {category!r}; available: {list(CATEGORIES)}")

@@ -5,18 +5,17 @@ probes (prompt injection, jailbreak, encoding attacks, leakrepetition,
 ...). Rather than reimplementing them, this engine shells out to the
 installed ``garak`` CLI and maps per-probe results onto MITRE ATLAS.
 
-Install with: ``pip install garak`` (or ``pip install llm-redteam-lab[garak]``).
+Install with: ``pip install garak``.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 import shutil
 import subprocess
 from typing import Any
 
-from rtl.engines.base import Engine, EngineResult, EngineUnavailableError
+from rtl.engines.base import Engine, EngineError, EngineResult, EngineUnavailableError
 from rtl.logging import get_logger
 
 log = get_logger("garak")
@@ -70,7 +69,7 @@ class GarakEngine(Engine):
         if not shutil.which(self.garak_bin):
             raise EngineUnavailableError(
                 self.name,
-                "garak is not installed; run `pip install garak` (extra: `[garak]`)",
+                "garak is not installed; run `pip install garak`",
             )
 
         selected = probes or DEFAULT_PROBES
@@ -80,14 +79,22 @@ class GarakEngine(Engine):
         if report_prefix:
             cmd += ["--report_prefix", report_prefix]
         log.info("garak: running %s", " ".join(cmd))
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+        except subprocess.TimeoutExpired as exc:
+            raise EngineError(f"{self.name}: garak timed out after 3600s") from exc
+        except OSError as exc:
+            raise EngineError(f"{self.name}: could not start garak: {exc}") from exc
         if proc.returncode != 0:
             log.warning("garak exited %d: %s", proc.returncode, proc.stderr[-400:])
 
         results: list[EngineResult] = []
         for prefix, found in self._load_report(report_prefix):
             for probe_id, attempts in found.items():
-                success = any(item.get("passed", False) or item.get("status") == "fail" for item in attempts)
+                success = any(
+                    isinstance(item, dict) and (item.get("passed", False) or item.get("status") == "fail")
+                    for item in attempts
+                )
                 results.append(
                     EngineResult(
                         engine=self.name,
@@ -111,18 +118,40 @@ class GarakEngine(Engine):
 
     @staticmethod
     def _load_report(report_prefix: str | None) -> list[tuple[str, dict[str, list[dict[str, Any]]]]]:
-        """Best-effort parse of garak's JSON report files."""
+        """Best-effort parse of garak's JSON report files.
+
+        garak's report schema is not contractual, so a report that is valid
+        JSON but has an unexpected shape must never crash a scan. Malformed
+        plugin entries are skipped with a warning; the well-formed remainder is
+        still returned.
+        """
         if not report_prefix:
             return []
-        data: list[tuple[str, dict[str, list[dict[str, Any]]]]] = []
         try:
             with open(f"{report_prefix}.report.json", encoding="utf-8") as handle:
                 report = json.load(handle)
-            for plugin, entries in report.get("plugins", {}).items():
-                attempts = entries.get("attempts", [])
-                data.append((plugin, {plugin: attempts}))
         except (OSError, json.JSONDecodeError) as exc:
-            logging.getLogger("rtl.garak").warning("could not parse garak report: %s", exc)
+            log.warning("could not parse garak report: %s", exc)
+            return []
+
+        if not isinstance(report, dict):
+            log.warning("ignoring garak report with unexpected top-level type %s", type(report).__name__)
+            return []
+        plugins = report.get("plugins", {})
+        if not isinstance(plugins, dict):
+            log.warning("ignoring garak report with malformed 'plugins' section")
+            return []
+
+        data: list[tuple[str, dict[str, list[dict[str, Any]]]]] = []
+        for plugin, entries in plugins.items():
+            if not isinstance(plugin, str) or not isinstance(entries, dict):
+                log.warning("ignoring malformed garak plugin entry %r", plugin)
+                continue
+            attempts = entries.get("attempts", [])
+            if not isinstance(attempts, list):
+                log.warning("ignoring malformed garak attempts for plugin %r", plugin)
+                continue
+            data.append((plugin, {plugin: attempts}))
         return data
 
 

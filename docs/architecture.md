@@ -8,7 +8,7 @@
                                         │ ScanOptions (pydantic)
                           ┌─────────────▼────────────────┐
                           │           suite YAML          │
-                          │   suites/quick|full|custom    │
+                          │   rtl/suites/quick|full|custom│
                           └─────────────┬────────────────┘
                                         │ resolve()
                           ┌─────────────▼────────────────┐      ┌──────────────────┐

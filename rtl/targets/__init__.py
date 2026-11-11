@@ -27,10 +27,19 @@ TARGET_REGISTRY: dict[str, type[Target]] = {
 
 
 def build_target(spec: str, **kwargs: Any) -> Target:
-    """Build a target from a ``provider:model`` spec (see config.TargetConfig)."""
+    """Build a target from a ``provider:model`` spec (see config.TargetConfig).
+
+    Any keyword overrides are validated against :class:`TargetConfig` (e.g.
+    ``base_url=``, ``temperature=``) and applied before construction. Unknown
+    keys are ignored, matching pydantic's default, rather than silently dropped
+    as they were previously.
+    """
     from rtl.config import TargetConfig
 
-    return TargetConfig.parse(spec).build_target()
+    cfg = TargetConfig.parse(spec)
+    if kwargs:
+        cfg = TargetConfig.model_validate({**cfg.model_dump(), **kwargs})
+    return cfg.build_target()
 
 
 __all__ = [
