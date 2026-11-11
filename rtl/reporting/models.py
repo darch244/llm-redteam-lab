@@ -160,7 +160,7 @@ class Finding(BaseModel):
     error: str | None = None
     timestamp: datetime = Field(default_factory=_utcnow)
 
-    @computed_field  # type: ignore[misc]
+    @computed_field
     @property
     def is_execution_error(self) -> bool:
         if not self.error:

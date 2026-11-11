@@ -39,12 +39,8 @@ def _build_context(result: ScanResult, *, redact: bool = True) -> dict[str, obje
         item = cast(dict[str, Any], scrub_dict(raw_item)) if redact else raw_item
         item["response_excerpt"] = _scrub(finding.response)[:800]
         item["prompt_excerpt"] = _scrub(finding.prompt)[:500]
-        item["effective_prompt_excerpt"] = (
-            _scrub(finding.effective_prompt)[:500] if finding.effective_prompt else ""
-        )
-        item["atlas_names"] = [
-            ATLAS_MAP.get(tech, {}).get("name", tech) for tech in item.get("atlas_ids", [])
-        ]
+        item["effective_prompt_excerpt"] = _scrub(finding.effective_prompt)[:500] if finding.effective_prompt else ""
+        item["atlas_names"] = [ATLAS_MAP.get(tech, {}).get("name", tech) for tech in item.get("atlas_ids", [])]
         item["is_execution_error"] = finding.is_execution_error
         findings.append(item)
 
@@ -75,9 +71,13 @@ def _build_context(result: ScanResult, *, redact: bool = True) -> dict[str, obje
         for tech_id in sorted(combined_atlas, key=lambda i: -combined_atlas[i])
     ]
 
+    meta_dict = scrub_dict(result.meta.model_dump(mode="json")) if redact else result.meta.model_dump(mode="json")
+    summary_dict = (
+        scrub_dict(result.summary.model_dump(mode="json")) if redact else result.summary.model_dump(mode="json")
+    )
     return {
-        "meta": scrub_dict(result.meta.model_dump(mode="json")) if redact else result.meta.model_dump(mode="json"),
-        "summary": scrub_dict(result.summary.model_dump(mode="json")) if redact else result.summary.model_dump(mode="json"),
+        "meta": meta_dict,
+        "summary": summary_dict,
         "findings": findings,
         "scenario_outcomes": [_scenario_row(outcome, redact=redact) for outcome in result.scenario_outcomes],
         "scenario_counts": scenario_status_counts(result.scenario_outcomes),

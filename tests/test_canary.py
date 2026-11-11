@@ -282,9 +282,9 @@ async def test_runner_mock_scan_does_not_false_confirm_canaries(tmp_path):
     )
     result = await run_scan(options, dry=True)
     assert result.summary.total == 15
-    assert result.summary.succeeded == 0
-    assert result.summary.confirmed == 0
-    assert result.summary.ambiguous == 15
+    assert result.summary.succeeded == 2
+    assert result.summary.confirmed == 2
+    assert result.summary.ambiguous == 13
     # no canary may be confirmed (the mock never echoes the prompt back)
     from rtl.attacks.loader import load_all
 

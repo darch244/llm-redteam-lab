@@ -113,9 +113,7 @@ def scan(
         seed=seed,
     )
     result = asyncio.run(_run(options))
-    console.print(
-        f"[green]Scan complete:[/green] {format_scan_summary(result.summary, result.scenario_outcomes)}"
-    )
+    console.print(f"[green]Scan complete:[/green] {format_scan_summary(result.summary, result.scenario_outcomes)}")
     console.print(f"[cyan]Reports:[/cyan] {options.output_dir}")
 
 

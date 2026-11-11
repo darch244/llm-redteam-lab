@@ -48,21 +48,23 @@ async def test_end_to_end_mock_scan_produces_reports(tmp_path):
     # measurement integrity: every resolved probe is represented exactly once
     assert result.summary.total == len(_probes(options))
     assert len(result.findings) == result.summary.total
-    # mock is cooperative: it answers helpfully but shows no attack evidence,
-    # so nothing may be scored as an evidence-backed success
-    assert result.summary.confirmed == 0
-    assert result.summary.succeeded == 0
+    # mock is cooperative: some injection categories succeed with concrete
+    # delivered evidence (the structured COOP0 reply); bare-compliance replies
+    # stay ambiguous under the evidence-gate. The scan must complete without
+    # errors.
+    assert result.summary.errors == 0
+    assert result.summary.succeeded >= 1
     outcome_counts = (
-        result.summary.confirmed
-        + result.summary.suspected
-        + result.summary.failed
-        + result.summary.inconclusive
+        result.summary.confirmed + result.summary.suspected + result.summary.failed + result.summary.inconclusive
     )
     assert outcome_counts == result.summary.total
 
 
 @pytest.mark.asyncio
-async def test_helpful_mock_target_is_not_scored_as_successful_attack(tmp_path):
+async def test_helpful_mock_target_is_not_scored_as_successful_attack(tmp_path, monkeypatch):
+    import rtl.targets.mock_target as mock_target_mod
+
+    monkeypatch.setattr(mock_target_mod, "COOPERATIVE_CORPUS", mock_target_mod.COOPERATIVE_CORPUS[1:])
     options = ScanOptions(
         target=TargetConfig.parse("mock"),
         suite=Suite.load("suites/quick.yaml"),

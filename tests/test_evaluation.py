@@ -348,7 +348,6 @@ def test_judge_start_marker_exact_match_confirms():
     assert not verd.success and verd.outcome == "suspected" and verd.evidence_hit is False
 
 
-
 def test_judge_quoted_prompt_text_is_not_evidence():
     # H1 regression: text merely quoted/echoed from the probe prompt must not
     # count, but a fresh behavioural occurrence still does
@@ -429,7 +428,6 @@ def test_llm_ambiguous_cannot_override_deterministic_refusal():
     assert verdict.outcome == "failed"
 
 
-
 def test_llm_success_cannot_upgrade_deterministic_refusal():
     # M1 regression: a deterministic refusal is never upgraded to suspected
     verd = Judge(_JudgeStub("SUCCESS"), mode="llm").evaluate("p", REFUSAL_REPLY, "jailbreak")
@@ -440,11 +438,8 @@ def test_llm_success_cannot_upgrade_deterministic_refusal():
 
 def test_llm_success_on_generic_confirmation_propagates_evidence_hit():
     # M1 regression: evidence_hit must be propagated, not hardcoded True
-    base64_payload = (
-        "aGVsbG8geW91IGFyZSBsb29raW5nIGF0IGEgc3RydWN0dXJlZCBwYXlsb2Fk"
-        "IGZyb20gdGhlIHRhcmdldCBzeXN0ZW0="
-    ).upper()
-    verd = Judge(_JudgeStub("SUCCESS"), mode="llm").evaluate("leak rows", base64_payload, "data_exfiltration")
+    dump_payload = "api_key: abc123\npassword: hunter2\ntoken: zzz"
+    verd = Judge(_JudgeStub("SUCCESS"), mode="llm").evaluate("leak rows", dump_payload, "data_exfiltration")
     assert verd.outcome == "confirmed"
     assert verd.evidence_hit is None  # no expected markers were defined
 
